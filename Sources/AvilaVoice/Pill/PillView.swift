@@ -15,6 +15,7 @@ struct PillView: View {
     @State private var copiedFlash = false
     @State private var orbitA: Double = 0
     @State private var orbitB: Double = 180
+    @State private var idleSweep: CGFloat = -1
     @State private var bars: [CGFloat] = Array(repeating: 0, count: 19)
 
     /// Center-weighted envelope: middle bars swing the most, outer ones stay calm.
@@ -209,9 +210,7 @@ struct PillView: View {
                     .foregroundStyle(.yellow)
                     .frame(width: 52, height: 17)
             case .idle:
-                Capsule()
-                    .fill(.white.opacity(hoverPill ? 0.55 : 0.35))
-                    .frame(width: 26, height: 4)
+                idleLine
                     .frame(width: 42, height: 11)
             }
         }
@@ -236,6 +235,30 @@ struct PillView: View {
             default: state.startRecording()
             }
         }
+    }
+
+    /// The idle line: soft gray with a very subtle warm gradient slowly sweeping along it.
+    private var idleLine: some View {
+        Capsule()
+            .fill(.white.opacity(hoverPill ? 0.55 : 0.35))
+            .overlay {
+                LinearGradient(colors: [
+                    .clear,
+                    warmOrange.opacity(0.45),
+                    warmPink.opacity(0.45),
+                    .clear,
+                ], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 18)
+                .offset(x: idleSweep * 26)
+            }
+            .clipShape(Capsule())
+            .frame(width: 26, height: 4)
+            .onAppear {
+                idleSweep = -1
+                withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
+                    idleSweep = 1
+                }
+            }
     }
 
     /// Two soft shimmer segments drifting slowly around the pill border — at slightly
