@@ -10,6 +10,10 @@ struct StatsEntry: Codable {
 @MainActor
 final class StatsStore: ObservableObject {
     private static let key = "stats.entries"
+    /// An undecodable history blob is parked here instead of being overwritten.
+    private static let backupKey = "stats.entries.backup"
+    /// Keep ~13 months — enough for every summary view.
+    static let retentionDays = 400
 
     @Published private(set) var entries: [StatsEntry] = []
 
@@ -23,18 +27,33 @@ final class StatsStore: ObservableObject {
         if UserDefaults.standard.object(forKey: "stats.typingWPM") == nil {
             UserDefaults.standard.set(40.0, forKey: "stats.typingWPM")
         }
-        if let data = UserDefaults.standard.data(forKey: Self.key),
-           let decoded = try? JSONDecoder().decode([StatsEntry].self, from: data) {
-            // Keep ~13 months — enough for every summary view, bounded launch cost.
-            let cutoff = Calendar.current.date(byAdding: .day, value: -400, to: .now) ?? .distantPast
-            entries = decoded.filter { $0.date >= cutoff }
-            if entries.count != decoded.count { persist() }
+        guard let data = UserDefaults.standard.data(forKey: Self.key) else { return }
+        if let decoded = try? JSONDecoder().decode([StatsEntry].self, from: data) {
+            // Pruned in memory only — the next record() persists the trimmed state,
+            // so app launch never pays an extra encode + write.
+            entries = Self.pruned(decoded)
+        } else {
+            // Never let the next save overwrite a possibly repairable blob.
+            UserDefaults.standard.set(data, forKey: Self.backupKey)
+            NSLog("AvilaVoice: stats history was undecodable — parked under \(Self.backupKey)")
         }
     }
 
     func record(words: Int, speakingSeconds: Double) {
         entries.append(StatsEntry(date: .now, words: words, speakingSeconds: speakingSeconds))
+        entries = Self.pruned(entries)
         persist()
+    }
+
+    /// Drops entries older than `retentionDays`, measured from the NEWEST entry rather
+    /// than the wall clock — a wrongly future-set system clock can therefore never
+    /// wipe real history.
+    private static func pruned(_ entries: [StatsEntry]) -> [StatsEntry] {
+        guard let newest = entries.map(\.date).max(),
+              let cutoff = Calendar.current.date(byAdding: .day,
+                                                 value: -retentionDays,
+                                                 to: newest) else { return entries }
+        return entries.filter { $0.date >= cutoff }
     }
 
     struct Summary {
@@ -64,6 +83,8 @@ final class StatsStore: ObservableObject {
     private func persist() {
         if let data = try? JSONEncoder().encode(entries) {
             UserDefaults.standard.set(data, forKey: Self.key)
+        } else {
+            NSLog("AvilaVoice: could not encode stats entries — keeping previous data on disk")
         }
     }
 }
