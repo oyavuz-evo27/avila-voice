@@ -15,7 +15,7 @@ struct PillView: View {
     @State private var copiedFlash = false
     @State private var orbitA: Double = 0
     @State private var orbitB: Double = 180
-    @State private var idleSweep: CGFloat = -1
+    @State private var idlePulse = false
     @State private var bars: [CGFloat] = Array(repeating: 0, count: 19)
 
     /// Center-weighted envelope: middle bars swing the most, outer ones stay calm.
@@ -237,26 +237,25 @@ struct PillView: View {
         }
     }
 
-    /// The idle line: soft gray with a very subtle warm gradient slowly sweeping along it.
+    /// The idle line: stays gray — its outline breathes a soft warm glow that slowly
+    /// appears and fades again.
     private var idleLine: some View {
         Capsule()
             .fill(.white.opacity(hoverPill ? 0.55 : 0.35))
             .overlay {
-                LinearGradient(colors: [
-                    .clear,
-                    warmOrange.opacity(0.45),
-                    warmPink.opacity(0.45),
-                    .clear,
-                ], startPoint: .leading, endPoint: .trailing)
-                .frame(width: 18)
-                .offset(x: idleSweep * 26)
+                Capsule()
+                    .stroke(
+                        LinearGradient(colors: [warmOrange, warmPink],
+                                       startPoint: .leading, endPoint: .trailing),
+                        lineWidth: 0.8)
+                    .shadow(color: warmPink.opacity(0.4), radius: 2.5)
+                    .opacity(idlePulse ? 0.6 : 0.0)
             }
-            .clipShape(Capsule())
             .frame(width: 26, height: 4)
             .onAppear {
-                idleSweep = -1
-                withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
-                    idleSweep = 1
+                idlePulse = false
+                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                    idlePulse = true
                 }
             }
     }
