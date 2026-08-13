@@ -13,6 +13,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$BIN" "$APP/Contents/MacOS/AvilaVoice"
 [ -f "$ROOT/Resources/AppIcon.icns" ] && cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+# SwiftPM resource bundle (menu bar icon etc.)
+BUNDLE="$ROOT/.build/release/AvilaVoice_AvilaVoice.bundle"
+[ -d "$BUNDLE" ] && cp -R "$BUNDLE" "$APP/Contents/Resources/"
 
 # Ad-hoc signature: required so macOS TCC (mic/accessibility) remembers permissions.
 codesign --force --sign - "$APP"

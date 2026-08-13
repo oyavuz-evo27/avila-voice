@@ -9,7 +9,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AvilaVoice",
-            path: "Sources/AvilaVoice"
+            path: "Sources/AvilaVoice",
+            resources: [
+                .copy("Resources/MenuBarIcon.png")
+            ]
         )
     ]
 )
