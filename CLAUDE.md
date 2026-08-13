@@ -115,3 +115,12 @@ unter „Lokal" ergänzen).
   (Tastatur/Modifier/Maustasten, Esc bricht ab). Modi-Editor: eigene Modi mit
   KI-Anweisung + Kontext-Schaltern pro Modus (aktive App, markierter Text,
   Zwischenablage, Screenshot-OCR via ScreenCaptureKit+Vision — jetzt implementiert).
+- **2026-08-13 (Spätabend)** — Qualitätsrunde auf Onurs Wunsch: Design-Agent (15 Befunde)
+  + QA-Agent (22 Befunde) → alle 37 behoben, u. a. kritischer Zustandsmaschinen-Crash,
+  LLM-Fallback auf Rohtranskript, Kombi-Hotkeys im Recorder, Login-Start (SMAppService),
+  Verlauf-Menü, abbrechbare Verarbeitung mit 60-s-Watchdog, Fehler-Bubble, Materialien,
+  Dock-/Multi-Monitor-Verhalten, workflow-permissions. Abschließender /code-review
+  (Stufe high, 10 Blickwinkel) fand 7 Befunde in der Statistik-Bereinigung → behoben
+  (Cutoff relativ zum neuesten Eintrag statt Systemuhr, Prune bei jedem record(),
+  Backup-Key für undecodierbare Blobs). Stand: gepusht, App läuft, Onurs
+  End-to-End-Test (Hotkey-Freigaben) steht noch aus.
