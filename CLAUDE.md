@@ -103,3 +103,12 @@ unter „Lokal" ergänzen).
   dem Mini: Foundation Models VERFÜGBAR, SpeechAnalyzer de/en installiert. App gestartet.
   Hinweis: Ad-hoc-Signatur ⇒ nach jedem Rebuild können Bedienungshilfen/
   Eingabemonitoring-Freigaben neu zu setzen sein (später: eigenes Signatur-Zertifikat).
+- **2026-08-13 (Abend)** — Laufzeit-Feedback-Runde mit Onur: Pille sichtbar gemacht
+  (Layout-Bug), Multi-Monitor-Folgen, Mikrofonwahl (CoreAudio), deutsche Lokalisierung,
+  Pillen-Redesign (Kreis-Buttons links Kopieren/rechts Modi, Sprechblase, Klick auf
+  Pille = Aufnahme, Live-Waveform mit Mitten-Gewichtung, langsam driftende
+  Schimmer-Segmente 12/17 s, atmende Idle-Umrandung). Hotkey-System ausgebaut:
+  Push-to-talk UND Hands-free getrennt konfigurierbar per Hotkey-Recorder
+  (Tastatur/Modifier/Maustasten, Esc bricht ab). Modi-Editor: eigene Modi mit
+  KI-Anweisung + Kontext-Schaltern pro Modus (aktive App, markierter Text,
+  Zwischenablage, Screenshot-OCR via ScreenCaptureKit+Vision — jetzt implementiert).

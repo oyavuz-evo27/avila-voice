@@ -19,6 +19,8 @@ final class AppState: ObservableObject {
     @Published var modes: [Mode] = Mode.builtins
     @Published var selectedModeID: UUID = Mode.standard.id
     @Published var dictionaryWords: [String] = []
+    @Published var pttBinding: HotkeyBinding?
+    @Published var handsFreeBinding: HotkeyBinding?
 
     let history = HistoryStore()
     let stats = StatsStore()
@@ -36,8 +38,9 @@ final class AppState: ObservableObject {
     }
 
     private init() {
-        loadCustomModes()
+        loadModes()
         loadDictionary()
+        loadBindings()
     }
 
     // MARK: - Lifecycle
@@ -46,14 +49,82 @@ final class AppState: ObservableObject {
         recorder.onLevel = { [weak self] level in
             DispatchQueue.main.async { self?.audioLevel = level }
         }
-        hotkeys.onPressDown = { [weak self] in self?.hotkeyDown() }
-        hotkeys.onPressUp = { [weak self] held in self?.hotkeyUp(heldFor: held) }
+        syncBindingsToManager()
+        hotkeys.onPTTDown = { [weak self] in self?.hotkeyDown() }
+        hotkeys.onPTTUp = { [weak self] held in self?.hotkeyUp(heldFor: held) }
+        hotkeys.onHandsFreeToggle = { [weak self] in self?.handsFreeToggle() }
         hotkeys.start()
         Task.detached { [sttEngine] in await sttEngine.warmUp() }
     }
 
-    // MARK: - Hotkey semantics (hold = push-to-talk, tap = toggle)
+    // MARK: - Hotkey bindings
 
+    func setBinding(_ binding: HotkeyBinding?, for role: HotkeyRole) {
+        switch role {
+        case .pushToTalk:
+            if binding != nil && binding == handsFreeBinding { handsFreeBinding = nil }
+            pttBinding = binding
+        case .handsFree:
+            if binding != nil && binding == pttBinding { pttBinding = nil }
+            handsFreeBinding = binding
+        }
+        persistBindings()
+        syncBindingsToManager()
+    }
+
+    /// Arms the recorder: the next key/mouse press becomes the binding for `role`.
+    func captureBinding(for role: HotkeyRole,
+                        completion: @escaping @MainActor (Bool) -> Void) {
+        hotkeys.captureHandler = { [weak self] captured in
+            if let captured { self?.setBinding(captured, for: role) }
+            completion(captured != nil)
+        }
+    }
+
+    func cancelCapture() {
+        hotkeys.captureHandler = nil
+    }
+
+    private func syncBindingsToManager() {
+        hotkeys.pttBinding = pttBinding
+        hotkeys.handsFreeBinding = handsFreeBinding
+    }
+
+    private func loadBindings() {
+        pttBinding = Self.decodeBinding(key: "hotkeys.ptt") ?? .defaultPushToTalk
+        handsFreeBinding = Self.decodeBinding(key: "hotkeys.handsFree") ?? .defaultHandsFree
+        // An explicitly cleared binding is stored as empty data.
+        if let data = UserDefaults.standard.data(forKey: "hotkeys.ptt"), data.isEmpty {
+            pttBinding = nil
+        }
+        if let data = UserDefaults.standard.data(forKey: "hotkeys.handsFree"), data.isEmpty {
+            handsFreeBinding = nil
+        }
+    }
+
+    private func persistBindings() {
+        Self.encodeBinding(pttBinding, key: "hotkeys.ptt")
+        Self.encodeBinding(handsFreeBinding, key: "hotkeys.handsFree")
+    }
+
+    private static func decodeBinding(key: String) -> HotkeyBinding? {
+        guard let data = UserDefaults.standard.data(forKey: key), !data.isEmpty else {
+            return nil
+        }
+        return try? JSONDecoder().decode(HotkeyBinding.self, from: data)
+    }
+
+    private static func encodeBinding(_ binding: HotkeyBinding?, key: String) {
+        if let binding, let data = try? JSONEncoder().encode(binding) {
+            UserDefaults.standard.set(data, forKey: key)
+        } else {
+            UserDefaults.standard.set(Data(), forKey: key)
+        }
+    }
+
+    // MARK: - Hotkey semantics
+
+    /// Push-to-talk key: hold = record while held, short tap = toggle.
     private func hotkeyDown() {
         switch phase {
         case .recording:
@@ -73,6 +144,16 @@ final class AppState: ObservableObject {
             // else: it was a tap that just started toggle mode → keep recording
         } else if case .recording = phase {
             finishRecording()          // second tap ends toggle recording
+        }
+    }
+
+    /// Hands-free key: every press toggles.
+    private func handsFreeToggle() {
+        if case .recording = phase {
+            pushToTalkActive = false
+            finishRecording()
+        } else {
+            startRecording()
         }
     }
 
@@ -100,10 +181,12 @@ final class AppState: ObservableObject {
         phase = .processing
         let mode = selectedMode
         let dictionary = dictionaryWords
-        let context = mode.useContext ? ContextCollector.collect() : nil
 
         Task { [sttEngine, llmEngine] in
             do {
+                let context: DictationContext? = mode.context.any
+                    ? await ContextCollector.collect(mode.context)
+                    : nil
                 let raw = try await sttEngine.transcribe(fileURL: url)
                 let final: String
                 if await llmEngine.isAvailable() {
@@ -152,18 +235,39 @@ final class AppState: ObservableObject {
 
     // MARK: - Modes & dictionary persistence
 
-    func loadCustomModes() {
-        if let data = UserDefaults.standard.data(forKey: "modes.custom"),
-           let custom = try? JSONDecoder().decode([Mode].self, from: data) {
-            modes = Mode.builtins + custom
+    func loadModes() {
+        if let data = UserDefaults.standard.data(forKey: "modes.all"),
+           let stored = try? JSONDecoder().decode([Mode].self, from: data) {
+            var result = stored
+            for builtin in Mode.builtins where !result.contains(where: { $0.id == builtin.id }) {
+                result.insert(builtin, at: 0)
+            }
+            modes = result
+        } else if let data = UserDefaults.standard.data(forKey: "modes.custom"),
+                  let custom = try? JSONDecoder().decode([Mode].self, from: data) {
+            modes = Mode.builtins + custom // migrate from the old storage key
+            saveModes()
         }
     }
 
-    func saveCustomModes() {
-        let custom = modes.filter { !$0.isBuiltin }
-        if let data = try? JSONEncoder().encode(custom) {
-            UserDefaults.standard.set(data, forKey: "modes.custom")
+    func saveModes() {
+        if let data = try? JSONEncoder().encode(modes) {
+            UserDefaults.standard.set(data, forKey: "modes.all")
         }
+    }
+
+    func addCustomMode() -> UUID {
+        let mode = Mode(name: L("New mode"), systemPrompt: "")
+        modes.append(mode)
+        saveModes()
+        return mode.id
+    }
+
+    func deleteMode(id: UUID) {
+        guard let mode = modes.first(where: { $0.id == id }), !mode.isBuiltin else { return }
+        modes.removeAll { $0.id == id }
+        if selectedModeID == id { selectedModeID = Mode.standard.id }
+        saveModes()
     }
 
     func loadDictionary() {

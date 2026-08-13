@@ -1,11 +1,21 @@
 import Foundation
 
+/// Which context is gathered for a mode and handed to the LLM.
+struct ContextOptions: Codable, Equatable {
+    var activeApp = false
+    var selectedText = false
+    var clipboard = false
+    var screenshotOCR = false
+
+    var any: Bool { activeApp || selectedText || clipboard || screenshotOCR }
+}
+
 /// A dictation mode: how the raw transcript is post-processed by the local LLM.
 struct Mode: Identifiable, Codable, Equatable {
     var id: UUID
     var name: String
     var systemPrompt: String
-    var useContext: Bool
+    var context: ContextOptions
     var isBuiltin: Bool
 
     /// Localized name for built-in modes; custom modes keep the user's name.
@@ -20,13 +30,46 @@ struct Mode: Identifiable, Codable, Equatable {
     }
 
     init(id: UUID = UUID(), name: String, systemPrompt: String,
-         useContext: Bool = false, isBuiltin: Bool = false) {
+         context: ContextOptions = ContextOptions(), isBuiltin: Bool = false) {
         self.id = id
         self.name = name
         self.systemPrompt = systemPrompt
-        self.useContext = useContext
+        self.context = context
         self.isBuiltin = isBuiltin
     }
+
+    // MARK: Codable (tolerates the legacy `useContext: Bool` field)
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, systemPrompt, context, isBuiltin, useContext
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        systemPrompt = try c.decode(String.self, forKey: .systemPrompt)
+        isBuiltin = try c.decodeIfPresent(Bool.self, forKey: .isBuiltin) ?? false
+        if let options = try c.decodeIfPresent(ContextOptions.self, forKey: .context) {
+            context = options
+        } else if (try c.decodeIfPresent(Bool.self, forKey: .useContext)) == true {
+            context = ContextOptions(activeApp: true, selectedText: true,
+                                     clipboard: true, screenshotOCR: false)
+        } else {
+            context = ContextOptions()
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(systemPrompt, forKey: .systemPrompt)
+        try c.encode(context, forKey: .context)
+        try c.encode(isBuiltin, forKey: .isBuiltin)
+    }
+
+    // MARK: Built-ins
 
     static let standard = Mode(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
@@ -49,7 +92,8 @@ struct Mode: Identifiable, Codable, Equatable {
         (formal "Sie" in German unless the dictation clearly addresses a friend). \
         Structure the body into short paragraphs. Output only the e-mail text, nothing else.
         """,
-        useContext: true,
+        context: ContextOptions(activeApp: true, selectedText: true,
+                                clipboard: true, screenshotOCR: false),
         isBuiltin: true
     )
 

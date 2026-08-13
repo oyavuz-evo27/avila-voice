@@ -12,9 +12,11 @@ struct SettingsView: View {
             StatsSettings()
                 .tabItem { Label(L("Statistics"), systemImage: "chart.bar") }
         }
-        .frame(width: 480, height: 360)
+        .frame(width: 560, height: 440)
     }
 }
+
+// MARK: - General
 
 struct GeneralSettings: View {
     @AppStorage("sounds.enabled") private var soundsEnabled = true
@@ -24,64 +26,163 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Picker(L("Microphone"), selection: $micUID) {
-                Text(L("System default")).tag("")
-                ForEach(devices) { device in
-                    Text(device.name).tag(device.uid)
+            Section {
+                Picker(L("Microphone"), selection: $micUID) {
+                    Text(L("System default")).tag("")
+                    ForEach(devices) { device in
+                        Text(device.name).tag(device.uid)
+                    }
                 }
+                Picker(L("Dictation language"), selection: $sttLocale) {
+                    Text(L("German")).tag("de-DE")
+                    Text(L("English")).tag("en-US")
+                }
+                Toggle(L("Play sounds on start/stop"), isOn: $soundsEnabled)
             }
-            .onAppear { devices = AudioDeviceManager.inputDevices() }
-            Picker(L("Dictation language"), selection: $sttLocale) {
-                Text(L("German")).tag("de-DE")
-                Text(L("English")).tag("en-US")
+            Section {
+                HotkeyRecorderRow(title: L("Push-to-talk"), role: .pushToTalk)
+                HotkeyRecorderRow(title: L("Hands-free"), role: .handsFree)
+                Text(L("hotkey.hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            Toggle(L("Play sounds on start/stop"), isOn: $soundsEnabled)
-            LabeledContent(L("Hotkey"), value: L(HotkeyBinding.default.displayName))
-            Text(L("hotkey.hint"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear { devices = AudioDeviceManager.inputDevices() }
     }
 }
+
+/// One row of the hotkey recorder: shows the current binding; clicking arms capture,
+/// the next key or extra mouse button becomes the new binding (Esc cancels).
+struct HotkeyRecorderRow: View {
+    let title: String
+    let role: HotkeyRole
+    @EnvironmentObject var state: AppState
+    @State private var capturing = false
+
+    private var binding: HotkeyBinding? {
+        role == .pushToTalk ? state.pttBinding : state.handsFreeBinding
+    }
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: 6) {
+                Button {
+                    if capturing {
+                        state.cancelCapture()
+                        capturing = false
+                    } else {
+                        capturing = true
+                        state.captureBinding(for: role) { _ in capturing = false }
+                    }
+                } label: {
+                    Text(capturing
+                         ? L("Press key…")
+                         : binding.map { L($0.displayName) } ?? L("None"))
+                        .frame(minWidth: 110)
+                }
+                if binding != nil && !capturing {
+                    Button {
+                        state.setBinding(nil, for: role)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Modes
 
 struct ModesSettings: View {
     @EnvironmentObject var state: AppState
+    @State private var selection: UUID?
 
     var body: some View {
-        VStack(alignment: .leading) {
-            List {
-                ForEach(state.modes) { mode in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(mode.displayName).font(.headline)
-                            if mode.isBuiltin {
-                                Text(L("built-in"))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if mode.useContext {
-                                Image(systemName: "eye")
-                                    .font(.caption2)
-                                    .help(L("context.help"))
-                            }
-                        }
-                        Text(mode.systemPrompt)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                List(selection: $selection) {
+                    ForEach(state.modes) { mode in
+                        Text(mode.displayName).tag(mode.id)
                     }
                 }
+                .listStyle(.sidebar)
+                HStack(spacing: 8) {
+                    Button {
+                        selection = state.addCustomMode()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    Button {
+                        if let selection { state.deleteMode(id: selection) }
+                        selection = nil
+                    } label: {
+                        Image(systemName: "minus")
+                    }
+                    .disabled(selectedMode?.isBuiltin != false)
+                    Spacer()
+                }
+                .buttonStyle(.borderless)
+                .padding(6)
             }
-            Text(L("modes.hint"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+            .frame(width: 150)
+
+            Divider()
+
+            if let index = state.modes.firstIndex(where: { $0.id == selection }) {
+                ModeEditor(mode: $state.modes[index])
+                    .id(selection)
+            } else {
+                Text(L("modes.select"))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        .padding(.bottom)
+        .onAppear { if selection == nil { selection = state.modes.first?.id } }
+        .onChange(of: state.modes) { _, _ in state.saveModes() }
+    }
+
+    private var selectedMode: Mode? {
+        state.modes.first { $0.id == selection }
     }
 }
+
+struct ModeEditor: View {
+    @Binding var mode: Mode
+
+    var body: some View {
+        Form {
+            Section {
+                TextField(L("Name"), text: $mode.name)
+                    .disabled(mode.isBuiltin)
+            }
+            Section(L("AI instruction")) {
+                TextEditor(text: $mode.systemPrompt)
+                    .font(.system(size: 11))
+                    .frame(minHeight: 120)
+                    .disabled(mode.isBuiltin)
+                if mode.isBuiltin {
+                    Text(L("builtin.readonly"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section(L("Context")) {
+                Toggle(L("Active app"), isOn: $mode.context.activeApp)
+                Toggle(L("Selected text"), isOn: $mode.context.selectedText)
+                Toggle(L("Clipboard"), isOn: $mode.context.clipboard)
+                Toggle(L("Screen text (screenshot OCR)"), isOn: $mode.context.screenshotOCR)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Dictionary
 
 struct DictionarySettings: View {
     @EnvironmentObject var state: AppState
@@ -118,6 +219,8 @@ struct DictionarySettings: View {
         newWord = ""
     }
 }
+
+// MARK: - Statistics
 
 struct StatsSettings: View {
     @EnvironmentObject var state: AppState
