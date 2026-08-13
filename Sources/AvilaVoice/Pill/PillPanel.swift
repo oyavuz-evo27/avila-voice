@@ -7,7 +7,7 @@ import SwiftUI
 @MainActor
 final class PillPanel: NSPanel {
     static let shared = PillPanel()
-    static let panelSize = NSSize(width: 380, height: 170)
+    static let panelSize = NSSize(width: 380, height: 240)
 
     private var followTimer: Timer?
 

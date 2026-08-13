@@ -13,7 +13,8 @@ struct PillView: View {
     @State private var showAccessories = false
     @State private var modeListOpen = false
     @State private var copiedFlash = false
-    @State private var borderRotation: Double = 0
+    @State private var orbitA: Double = 0
+    @State private var orbitB: Double = 180
     @State private var bars: [CGFloat] = Array(repeating: 0, count: 21)
 
     /// Center-weighted envelope: middle bars swing the most, outer ones stay calm.
@@ -35,14 +36,14 @@ struct PillView: View {
 
             // Bubble zone above the row: transcript preview or mode chips.
             ZStack {
-                if hoverCopy || hoverBubble, let last = state.history.last {
+                if !isRecording, hoverCopy || hoverBubble, let last = state.history.last {
                     transcriptBubble(last.finalText)
                         .onHover { over in hoverBubble = over; updateVisibility() }
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(.opacity)
                 }
                 if modeListOpen {
                     modeChips
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(.opacity)
                 }
             }
 
@@ -50,6 +51,7 @@ struct PillView: View {
                 accessory(leftIcon, hovering: hoverCopy)
                     .opacity(showAccessories ? 1 : 0)
                     .scaleEffect(showAccessories ? 1 : 0.6)
+                    .allowsHitTesting(showAccessories)
                     .onHover { over in hoverCopy = over; updateVisibility() }
                     .onTapGesture { leftAction() }
 
@@ -58,6 +60,7 @@ struct PillView: View {
                 accessory(text: L("Modes"), hovering: hoverModes)
                     .opacity(showAccessories ? 1 : 0)
                     .scaleEffect(showAccessories ? 1 : 0.6)
+                    .allowsHitTesting(showAccessories)
                     .onHover { over in hoverModes = over; updateVisibility() }
                     .onTapGesture {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
@@ -123,9 +126,9 @@ struct PillView: View {
 
     private func accessory(_ icon: String, hovering: Bool) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.white)
-            .frame(width: 26, height: 26)
+            .frame(width: 23, height: 23)
             .background(.black.opacity(hovering ? 0.64 : 0.82), in: Circle())
             .overlay(Circle().strokeBorder(.white.opacity(hovering ? 0.25 : 0.12)))
             .contentShape(Circle())
@@ -133,10 +136,10 @@ struct PillView: View {
 
     private func accessory(text: String, hovering: Bool) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.system(size: 9.5, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 9)
-            .frame(height: 26)
+            .padding(.horizontal, 8)
+            .frame(height: 23)
             .background(.black.opacity(hovering ? 0.64 : 0.82), in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(hovering ? 0.25 : 0.12)))
             .contentShape(Capsule())
@@ -191,30 +194,30 @@ struct PillView: View {
             switch state.phase {
             case .recording:
                 waveform
-                    .frame(width: 130, height: 30)
+                    .frame(width: 116, height: 24)
             case .processing:
                 ProgressView()
                     .controlSize(.small)
-                    .frame(width: 60, height: 22)
+                    .frame(width: 52, height: 17)
             case .result(let inserted):
                 Image(systemName: inserted ? "checkmark" : "doc.on.clipboard")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 60, height: 22)
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 52, height: 17)
             case .error:
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.yellow)
-                    .frame(width: 60, height: 22)
+                    .frame(width: 52, height: 17)
             case .idle:
                 Capsule()
                     .fill(.white.opacity(hoverPill ? 0.55 : 0.35))
-                    .frame(width: 36, height: 5)
-                    .frame(width: 60, height: 14)
+                    .frame(width: 32, height: 4)
+                    .frame(width: 52, height: 11)
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(.black.opacity(hoverPill ? 0.64 : 0.82), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(hoverPill ? 0.25 : 0.12)))
         .overlay {
@@ -235,32 +238,42 @@ struct PillView: View {
         }
     }
 
-    /// Two warm gradient segments orbiting the pill border — subtle, no full ring.
+    /// Two soft shimmer segments drifting slowly around the pill border — at slightly
+    /// different speeds, so they are never perfectly parallel.
     private var recordingGlow: some View {
+        ZStack {
+            orbitStroke(angle: orbitA)
+            orbitStroke(angle: orbitB)
+        }
+        .shadow(color: warmPink.opacity(0.22), radius: 4)
+        .onAppear {
+            orbitA = 0
+            orbitB = 180
+            withAnimation(.linear(duration: 11.0).repeatForever(autoreverses: false)) {
+                orbitA = 360
+            }
+            withAnimation(.linear(duration: 15.0).repeatForever(autoreverses: false)) {
+                orbitB = 540
+            }
+        }
+    }
+
+    /// One gently fading gradient segment (~a quarter of the border).
+    private func orbitStroke(angle: Double) -> some View {
         Capsule()
             .strokeBorder(
                 AngularGradient(
                     gradient: Gradient(stops: [
                         .init(color: .clear, location: 0.00),
-                        .init(color: warmOrange.opacity(0.9), location: 0.10),
-                        .init(color: warmPink.opacity(0.9), location: 0.20),
-                        .init(color: .clear, location: 0.30),
-                        .init(color: .clear, location: 0.50),
-                        .init(color: warmOrange.opacity(0.9), location: 0.60),
-                        .init(color: warmPink.opacity(0.9), location: 0.70),
-                        .init(color: .clear, location: 0.80),
+                        .init(color: warmOrange.opacity(0.0), location: 0.04),
+                        .init(color: warmOrange.opacity(0.55), location: 0.13),
+                        .init(color: warmPink.opacity(0.55), location: 0.22),
+                        .init(color: warmPink.opacity(0.0), location: 0.30),
                         .init(color: .clear, location: 1.00),
                     ]),
                     center: .center,
-                    angle: .degrees(borderRotation)),
-                lineWidth: 1.8)
-            .shadow(color: warmPink.opacity(0.3), radius: 5)
-            .onAppear {
-                borderRotation = 0
-                withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
-                    borderRotation = 360
-                }
-            }
+                    angle: .degrees(angle)),
+                lineWidth: 1.5)
     }
 
     /// Live waveform: every bar reflects the current input level (no scrolling
@@ -279,7 +292,7 @@ struct PillView: View {
                 Capsule()
                     .fill(.white)
                     .frame(width: 2.5,
-                           height: max(3, bars[i] * 26))
+                           height: max(2.5, bars[i] * 20))
             }
         }
         .animation(.linear(duration: 0.08), value: bars)
