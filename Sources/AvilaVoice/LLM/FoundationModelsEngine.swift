@@ -10,12 +10,20 @@ final class FoundationModelsEngine: EnhancementEngine {
         SystemLanguageModel.default.availability == .available
     }
 
+    /// The system model has a ~4,096-token window (input + output). Longer dictations
+    /// are returned raw instead of risking a truncated or failed rewrite.
+    static let maxTranscriptLength = 3500
+
     func enhance(transcript: String,
                  mode: Mode,
                  dictionary: [String],
                  context: DictationContext?) async throws -> String {
         guard SystemLanguageModel.default.availability == .available else {
             throw EnhancementError.engineUnavailable(L("error.appleIntelligence"))
+        }
+        guard transcript.count <= Self.maxTranscriptLength else {
+            NSLog("AvilaVoice: transcript exceeds Foundation Models window, returning raw text")
+            return transcript
         }
         let session = LanguageModelSession(instructions: mode.systemPrompt)
         let prompt = PromptBuilder.userPrompt(transcript: transcript,

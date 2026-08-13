@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 enum DictationPhase: Equatable {
@@ -28,11 +29,17 @@ final class AppState: ObservableObject {
 
     private let recorder = AudioRecorder()
     private let hotkeys = HotkeyManager()
-    private var sttEngine: TranscriptionEngine = SpeechAnalyzerEngine()
-    private var llmEngine: EnhancementEngine = FoundationModelsEngine()
+    private let sttEngine: TranscriptionEngine = SpeechAnalyzerEngine()
+    private let llmEngine: EnhancementEngine = FoundationModelsEngine()
 
     /// True while a push-to-talk hold is in progress (started on key down).
     private var pushToTalkActive = false
+    /// Invalidates stale pipeline tasks: only the task with the current generation
+    /// may publish results — a later recording can never be overwritten by an
+    /// earlier, still-running pipeline.
+    private var pipelineGeneration = 0
+    private var pipelineTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     var selectedMode: Mode {
         modes.first { $0.id == selectedModeID } ?? .standard
@@ -42,6 +49,13 @@ final class AppState: ObservableObject {
         loadModes()
         loadDictionary()
         loadBindings()
+        // Forward nested store changes so views observing AppState refresh live.
+        history.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        stats.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Lifecycle
@@ -49,6 +63,14 @@ final class AppState: ObservableObject {
     func startServices() {
         recorder.onLevel = { [weak self] level in
             DispatchQueue.main.async { self?.audioLevel = level }
+        }
+        recorder.onConfigurationChange = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, case .recording = self.phase else { return }
+                self.recorder.cancel()
+                self.pushToTalkActive = false
+                self.setError(L("error.deviceChanged"))
+            }
         }
         syncBindingsToManager()
         hotkeys.onPTTDown = { [weak self] in self?.hotkeyDown() }
@@ -77,14 +99,14 @@ final class AppState: ObservableObject {
     /// Arms the recorder: the next key/mouse press becomes the binding for `role`.
     func captureBinding(for role: HotkeyRole,
                         completion: @escaping @MainActor (Bool) -> Void) {
-        hotkeys.captureHandler = { [weak self] captured in
+        hotkeys.setCaptureHandler { [weak self] captured in
             if let captured { self?.setBinding(captured, for: role) }
             completion(captured != nil)
         }
     }
 
     func cancelCapture() {
-        hotkeys.captureHandler = nil
+        hotkeys.setCaptureHandler(nil)
     }
 
     private func syncBindingsToManager() {
@@ -129,8 +151,8 @@ final class AppState: ObservableObject {
     /// Push-to-talk key: hold = record while held, short tap = toggle.
     private func hotkeyDown() {
         switch phase {
-        case .recording:
-            break // tap-up will decide
+        case .recording, .processing:
+            break // recording: tap-up decides; processing: ignore
         default:
             pushToTalkActive = true
             startRecording()
@@ -151,10 +173,13 @@ final class AppState: ObservableObject {
 
     /// Hands-free key: every press toggles.
     private func handsFreeToggle() {
-        if case .recording = phase {
+        switch phase {
+        case .recording:
             pushToTalkActive = false
             finishRecording()
-        } else {
+        case .processing:
+            break
+        default:
             startRecording()
         }
     }
@@ -162,14 +187,16 @@ final class AppState: ObservableObject {
     // MARK: - Pipeline
 
     func startRecording() {
-        guard phase != .recording else { return }
+        // Never start while recording or while a pipeline is still delivering —
+        // a second recorder start would corrupt state (and leak the audio tap).
+        guard phase != .recording, phase != .processing else { return }
         PillPanel.shared.reposition() // jump to the screen the user is working on
         do {
             try recorder.start()
             phase = .recording
             Sounds.playStart()
         } catch {
-            phase = .error(LF("error.microphone", error.localizedDescription))
+            setError(LF("error.microphone", error.localizedDescription))
         }
     }
 
@@ -183,26 +210,45 @@ final class AppState: ObservableObject {
         phase = .processing
         let mode = selectedMode
         let dictionary = dictionaryWords
+        pipelineGeneration += 1
+        let generation = pipelineGeneration
 
-        Task { [sttEngine, llmEngine] in
+        pipelineTask = Task { [sttEngine, llmEngine] in
+            defer { try? FileManager.default.removeItem(at: url) }
             do {
                 let context: DictationContext? = mode.context.any
                     ? await ContextCollector.collect(mode.context)
                     : nil
                 let raw = try await sttEngine.transcribe(fileURL: url)
-                let final: String
+                guard !Task.isCancelled else { return }
+                // The LLM step must never lose a successful transcript: any
+                // enhancement failure (guardrails, context window) falls back to raw.
+                var final = raw
                 if await llmEngine.isAvailable() {
-                    final = try await llmEngine.enhance(transcript: raw, mode: mode,
-                                                        dictionary: dictionary, context: context)
-                } else {
-                    final = raw
+                    do {
+                        final = try await llmEngine.enhance(transcript: raw, mode: mode,
+                                                            dictionary: dictionary,
+                                                            context: context)
+                    } catch {
+                        NSLog("AvilaVoice: enhancement failed, using raw transcript — \(error.localizedDescription)")
+                    }
                 }
-                try? FileManager.default.removeItem(at: url)
+                guard !Task.isCancelled, self.pipelineGeneration == generation,
+                      case .processing = self.phase else { return }
                 self.deliver(raw: raw, final: final, mode: mode, duration: duration)
             } catch {
-                try? FileManager.default.removeItem(at: url)
-                self.phase = .error(error.localizedDescription)
+                guard !Task.isCancelled, self.pipelineGeneration == generation,
+                      case .processing = self.phase else { return }
+                self.setError(error.localizedDescription)
             }
+        }
+
+        // Watchdog: a hung model download or LLM call must not freeze the app.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+            guard let self, self.pipelineGeneration == generation,
+                  case .processing = self.phase else { return }
+            self.pipelineTask?.cancel()
+            self.setError(L("error.timeout"))
         }
     }
 
@@ -210,6 +256,14 @@ final class AppState: ObservableObject {
         guard case .recording = phase else { return }
         recorder.cancel()
         pushToTalkActive = false
+        phase = .idle
+    }
+
+    func cancelProcessing() {
+        guard case .processing = phase else { return }
+        pipelineGeneration += 1 // invalidate the running task's delivery
+        pipelineTask?.cancel()
+        pipelineTask = nil
         phase = .idle
     }
 
@@ -230,6 +284,14 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Shows an error in the pill and clears it automatically.
+    private func setError(_ message: String) {
+        phase = .error(message)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            if case .error = self?.phase { self?.phase = .idle }
+        }
+    }
+
     func copyLastResult() {
         guard let last = history.last else { return }
         TextInserter.copyToClipboard(last.finalText)
@@ -241,8 +303,12 @@ final class AppState: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: "modes.all"),
            let stored = try? JSONDecoder().decode([Mode].self, from: data) {
             var result = stored
-            for builtin in Mode.builtins where !result.contains(where: { $0.id == builtin.id }) {
-                result.insert(builtin, at: 0)
+            var insertIndex = 0
+            for builtin in Mode.builtins {
+                if !result.contains(where: { $0.id == builtin.id }) {
+                    result.insert(builtin, at: min(insertIndex, result.count))
+                }
+                insertIndex += 1
             }
             modes = result
         } else if let data = UserDefaults.standard.data(forKey: "modes.custom"),

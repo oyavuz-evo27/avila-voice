@@ -12,14 +12,20 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$BIN" "$APP/Contents/MacOS/AvilaVoice"
-[ -f "$ROOT/Resources/AppIcon.icns" ] && cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
+    cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+fi
 # SwiftPM resource bundle (menu bar icon, Localizable.strings)
 BUNDLE="$ROOT/.build/release/AvilaVoice_AvilaVoice.bundle"
-[ -d "$BUNDLE" ] && cp -R "$BUNDLE" "$APP/Contents/Resources/"
+if [ -d "$BUNDLE" ]; then
+    cp -R "$BUNDLE" "$APP/Contents/Resources/"
+fi
 
 # Localized permission dialogs (InfoPlist.strings)
 for lproj in "$ROOT"/Resources/*.lproj; do
-    [ -d "$lproj" ] && cp -R "$lproj" "$APP/Contents/Resources/"
+    if [ -d "$lproj" ]; then
+        cp -R "$lproj" "$APP/Contents/Resources/"
+    fi
 done
 
 # Ad-hoc signature with a STABLE designated requirement (identifier only, no cdhash):

@@ -1,5 +1,6 @@
 import AppKit
 import IOKit.hid
+import ServiceManagement
 import SwiftUI
 
 @main
@@ -51,16 +52,25 @@ struct MenuContent: View {
     @EnvironmentObject var state: AppState
     @Environment(\.openSettings) private var openSettings
 
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
     var body: some View {
         Group {
-            if case .recording = state.phase {
-                Button(L("Stop Dictation")) { state.finishRecording() }
-                Button(L("Cancel Dictation")) { state.cancelRecording() }
-            } else {
-                Button(L("Start Dictation")) { state.startRecording() }
-            }
+            Text("Avila Voice v\(version)")
 
             Divider()
+
+            switch state.phase {
+            case .recording:
+                Button(L("Stop Dictation")) { state.finishRecording() }
+                Button(L("Cancel Dictation")) { state.cancelRecording() }
+            case .processing:
+                Button(L("Cancel Dictation")) { state.cancelProcessing() }
+            default:
+                Button(L("Start Dictation")) { state.startRecording() }
+            }
 
             Picker(L("Mode"), selection: $state.selectedModeID) {
                 ForEach(state.modes) { mode in
@@ -68,23 +78,35 @@ struct MenuContent: View {
                 }
             }
 
-            Divider()
-
-            if let last = state.history.last {
-                Button(L("Copy Last Dictation")) { state.copyLastResult() }
-                    .help(last.finalText)
+            if !state.history.records.isEmpty {
+                Menu(L("History")) {
+                    ForEach(state.history.records) { record in
+                        Button(preview(of: record)) {
+                            TextInserter.copyToClipboard(record.finalText)
+                        }
+                    }
+                    Divider()
+                    Button(L("Clear History")) { state.history.clear() }
+                }
             }
 
-            Button(L("Settings…")) { openSettings() }
-
             Divider()
 
+            Button(L("Settings…")) { openSettings() }
             Button(L("Check for Updates…")) {
                 NSWorkspace.shared.open(
                     URL(string: "https://github.com/oyavuz-evo27/avila-voice/releases")!)
             }
+
+            Divider()
+
             Button(L("Quit Avila Voice")) { NSApp.terminate(nil) }
         }
+    }
+
+    private func preview(of record: DictationRecord) -> String {
+        let text = record.finalText.replacingOccurrences(of: "\n", with: " ")
+        return text.count > 40 ? String(text.prefix(40)) + "…" : text
     }
 }
 
@@ -94,7 +116,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.startServices()
             PillPanel.shared.show()
             PermissionRequester.requestOnFirstLaunch()
+            registerLoginItemOnFirstLaunch()
         }
+    }
+
+    /// Launch at login defaults to ON (per project decision) — registered once;
+    /// afterwards the settings toggle is the single source of truth.
+    @MainActor
+    private func registerLoginItemOnFirstLaunch() {
+        guard !UserDefaults.standard.bool(forKey: "launchAtLogin.initialized") else { return }
+        UserDefaults.standard.set(true, forKey: "launchAtLogin.initialized")
+        try? SMAppService.mainApp.register()
     }
 }
 

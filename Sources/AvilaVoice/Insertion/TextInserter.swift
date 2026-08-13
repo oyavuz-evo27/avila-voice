@@ -7,7 +7,16 @@ import ApplicationServices
 @MainActor
 enum TextInserter {
 
+    /// Controls whose value is settable but that cannot take pasted text — the
+    /// settable-fallback must not "insert" into these.
+    private static let nonTextRoles: Set<String> = [
+        "AXSlider", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXMenuButton",
+        "AXIncrementor", "AXButton", "AXDisclosureTriangle", "AXValueIndicator",
+    ]
+
     /// True if the frontmost app has a focused element that accepts text.
+    /// Secure fields are excluded: a dictated password must never be pasted, logged
+    /// to history, or counted in statistics.
     static func hasEditableFocus() -> Bool {
         guard AXIsProcessTrusted() else { return false }
         let systemWide = AXUIElementCreateSystemWide()
@@ -18,14 +27,23 @@ enum TextInserter {
         guard err == .success, let element = focused else { return false }
         let axElement = element as! AXUIElement
 
-        var role: CFTypeRef?
-        AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &role)
-        if let role = role as? String,
-           ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) {
+        var subroleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(axElement, kAXSubroleAttribute as CFString, &subroleRef)
+        if subroleRef as? String == "AXSecureTextField" {
+            return false
+        }
+
+        var roleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &roleRef)
+        let role = roleRef as? String
+        if let role, ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) {
             return true
         }
+        if let role, Self.nonTextRoles.contains(role) {
+            return false
+        }
         // Many apps (browsers, Electron) expose editable areas differently — accept any
-        // element whose value is settable.
+        // remaining element whose value is settable.
         var settable = DarwinBoolean(false)
         AXUIElementIsAttributeSettable(axElement, kAXValueAttribute as CFString, &settable)
         return settable.boolValue
@@ -46,6 +64,7 @@ enum TextInserter {
 
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        let ourChangeCount = pasteboard.changeCount
 
         let source = CGEventSource(stateID: .combinedSessionState)
         let vDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true)  // V
@@ -55,8 +74,11 @@ enum TextInserter {
         vDown?.post(tap: .cghidEventTap)
         vUp?.post(tap: .cghidEventTap)
 
-        // Restore the clipboard after the paste has been processed.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        // Restore the clipboard after the paste has been processed — but only if the
+        // board still holds our text. If the user (or an app) wrote to it meanwhile,
+        // restoring would destroy their newer content.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            guard pasteboard.changeCount == ourChangeCount else { return }
             pasteboard.clearContents()
             var restored: [NSPasteboardItem] = []
             for itemData in savedItems {

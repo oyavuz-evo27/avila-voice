@@ -31,9 +31,10 @@ Foundation Models or a local open-weights LLM. No cloud. No account. No telemetr
 ## Install
 
 Download the latest `AvilaVoice.app` from
-[Releases](../../releases), move it to `/Applications`, then **right-click → Open** the
-first time (the app is not notarized — it is free software without an Apple Developer
-subscription).
+[Releases](../../releases) and move it to `/Applications`. The app is not notarized
+(free software without an Apple Developer subscription), so macOS blocks the first
+launch: open it once, then go to **System Settings → Privacy & Security** and click
+**"Open Anyway"**.
 
 On first launch, grant the requested permissions: Microphone, Accessibility (to type for
 you), Input Monitoring (global hotkeys), and — only if you enable screen context —

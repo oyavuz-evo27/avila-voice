@@ -54,12 +54,15 @@ Minimum-Deployment-Target: **macOS 26**.
 - **UI:** natives Apple-Design, Liquid Glass, hell/dunkel automatisch. Basis Englisch,
   vollständige deutsche Lokalisierung.
 - **Nicht in v1:** Live-Text beim Sprechen, Vision-LLM, Hotkeys pro Modus, Sparkle,
-  Meeting-/Datei-Transkription, Agent-Modus, Signierung/App Store.
+  Meeting-/Datei-Transkription, Agent-Modus, Signierung/App Store,
+  **STT-Sprach-Auto-Erkennung** (aktuell fester Sprachschalter in den Einstellungen —
+  Auto-Erkennung DE/EN ist geplant, Hinweis dazu steht im Settings-UI).
 
 ## Veröffentlichung
 - GitHub: öffentliches Repo `avila-voice` unter Account `oyavuz-evo27` (gh-CLI angemeldet)
 - Lizenz: MIT · Releases: GitHub Actions baut unsignierte `.app` als Download
-  (README erklärt Rechtsklick → Öffnen)
+  (README erklärt Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen";
+  Rechtsklick → Öffnen reicht seit macOS 15 nicht mehr)
 
 ## Benötigte Berechtigungen (beim ersten Start interaktiv erteilen)
 Mikrofon · Bedienungshilfen (Texteinfügung) · Eingabemonitoring (globale Hotkeys) ·

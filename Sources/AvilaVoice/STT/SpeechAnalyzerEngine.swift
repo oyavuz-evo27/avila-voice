@@ -4,15 +4,17 @@ import AVFAudio
 
 /// Apple's on-device SpeechAnalyzer (macOS 26+). System-managed models: near-zero RAM
 /// cost for the app. Best German quality for clean speech.
-final class SpeechAnalyzerEngine: TranscriptionEngine {
-    let displayName = "Apple SpeechAnalyzer"
+/// An actor so the per-locale asset preparation cache is race-free.
+actor SpeechAnalyzerEngine: TranscriptionEngine {
+    nonisolated let displayName = "Apple SpeechAnalyzer"
+
+    /// Locales whose model assets are verified installed — the (potentially slow)
+    /// AssetInventory check runs once per locale, not once per dictation.
+    private var preparedLocales: Set<String> = []
 
     func warmUp() async {
-        // Ensure the model assets for the preferred locales are installed.
         for identifier in ["de-DE", "en-US"] {
-            let locale = Locale(identifier: identifier)
-            guard let transcriber = try? await makeTranscriber(locale: locale) else { continue }
-            _ = transcriber
+            _ = try? await makeTranscriber(locale: Locale(identifier: identifier))
         }
     }
 
@@ -47,8 +49,11 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
         }) else {
             throw TranscriptionError.engineUnavailable(L("error.sttLocale"))
         }
-        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            try await request.downloadAndInstall()
+        if !preparedLocales.contains(locale.identifier) {
+            if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                try await request.downloadAndInstall()
+            }
+            preparedLocales.insert(locale.identifier)
         }
         return transcriber
     }

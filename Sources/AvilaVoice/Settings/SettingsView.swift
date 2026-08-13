@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
@@ -19,10 +20,12 @@ struct SettingsView: View {
 // MARK: - General
 
 struct GeneralSettings: View {
+    @EnvironmentObject var state: AppState
     @AppStorage("sounds.enabled") private var soundsEnabled = true
     @AppStorage("stt.locale") private var sttLocale = "de-DE"
     @AppStorage("audio.inputDeviceUID") private var micUID = ""
     @State private var devices: [AudioInputDevice] = []
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         Form {
@@ -37,7 +40,18 @@ struct GeneralSettings: View {
                     Text(L("German")).tag("de-DE")
                     Text(L("English")).tag("en-US")
                 }
+                Text(L("language.hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle(L("Play sounds on start/stop"), isOn: $soundsEnabled)
+                Toggle(L("Launch at login"), isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        if enabled {
+                            try? SMAppService.mainApp.register()
+                        } else {
+                            try? SMAppService.mainApp.unregister()
+                        }
+                    }
             }
             Section {
                 HotkeyStatusRow()
@@ -49,8 +63,8 @@ struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
         .onAppear { devices = AudioDeviceManager.inputDevices() }
+        .onDisappear { state.cancelCapture() }
     }
 }
 
@@ -103,7 +117,7 @@ struct HotkeyRecorderRow: View {
                 } label: {
                     Text(capturing
                          ? L("Press key…")
-                         : binding.map { L($0.displayName) } ?? L("None"))
+                         : binding?.displayName ?? L("None"))
                         .frame(minWidth: 110)
                 }
                 if binding != nil && !capturing {
@@ -211,25 +225,34 @@ struct ModeEditor: View {
 struct DictionarySettings: View {
     @EnvironmentObject var state: AppState
     @State private var newWord = ""
+    @State private var selection: String?
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(L("dictionary.hint"))
                 .font(.caption)
-            List {
+                .foregroundStyle(.secondary)
+            List(selection: $selection) {
                 ForEach(state.dictionaryWords, id: \.self) { word in
-                    Text(word)
-                }
-                .onDelete { offsets in
-                    state.dictionaryWords.remove(atOffsets: offsets)
-                    state.saveDictionary()
+                    Text(word).tag(word)
                 }
             }
-            HStack {
+            .listStyle(.bordered)
+            HStack(spacing: 8) {
                 TextField(L("dictionary.placeholder"), text: $newWord)
                     .onSubmit(addWord)
                 Button(L("Add"), action: addWord)
                     .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button {
+                    if let selection {
+                        state.dictionaryWords.removeAll { $0 == selection }
+                        state.saveDictionary()
+                    }
+                    selection = nil
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .disabled(selection == nil)
             }
         }
         .padding()
@@ -259,7 +282,6 @@ struct StatsSettings: View {
             }
         }
         .formStyle(.grouped)
-        .padding()
     }
 
     @ViewBuilder

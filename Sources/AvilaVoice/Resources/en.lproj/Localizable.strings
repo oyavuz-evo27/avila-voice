@@ -9,7 +9,6 @@
 "Quit Avila Voice" = "Quit Avila Voice";
 
 /* Pill */
-"Done" = "Done";
 "Cancel" = "Cancel";
 "Copy" = "Copy";
 
@@ -29,9 +28,16 @@
 "German" = "German";
 "English" = "English";
 "Play sounds on start/stop" = "Play sounds on start/stop";
-"Hotkey" = "Hotkey";
 "Right ⌘" = "Right ⌘";
 "Right ⌥" = "Right ⌥";
+"Right ⇧" = "Right ⇧";
+"Right ⌃" = "Right ⌃";
+"Mouse %d" = "Mouse %d";
+"Key %d" = "Key %d";
+"Launch at login" = "Launch at login";
+"language.hint" = "Applies per dictation. Automatic language detection is planned.";
+"History" = "History";
+"Clear History" = "Clear History";
 "Global hotkeys" = "Global hotkeys";
 "Active" = "Active";
 "hotkeys.inactive" = "Inactive — grant Accessibility and Input Monitoring";
@@ -40,9 +46,7 @@
 "Hands-free" = "Hands-free";
 "Press key…" = "Press a key…";
 "None" = "None";
-"hotkey.hint" = "Click a field, then press the desired key or extra mouse button. Esc cancels. Push-to-talk: hold to record (a short tap toggles). Hands-free: press once to start, again to stop.";
-"built-in" = "built-in";
-"context.help" = "Uses context (app, selection, clipboard)";
+"hotkey.hint" = "Click a field, then press the desired key, key combination, or extra mouse button. Esc cancels. Push-to-talk: hold to record (a short tap toggles). Hands-free: press once to start, again to stop.";
 "Name" = "Name";
 "AI instruction" = "AI instruction";
 "Context" = "Context";
@@ -66,6 +70,9 @@
 
 /* Errors */
 "error.noSpeech" = "No speech was recognized.";
+"error.noMicrophone" = "No microphone available.";
+"error.deviceChanged" = "The audio device changed — recording stopped.";
+"error.timeout" = "Processing took too long and was cancelled.";
 "error.microphone" = "Microphone error: %@";
 "error.sttLocale" = "SpeechAnalyzer does not support this language.";
 "error.appleIntelligence" = "Apple Intelligence is not available on this Mac. Enable it in System Settings → Apple Intelligence & Siri.";

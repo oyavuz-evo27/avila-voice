@@ -14,7 +14,8 @@ enum HotkeyBinding: Codable, Equatable {
     var displayName: String {
         switch self {
         case .modifierKey(let code):
-            return Self.modifierNames[code] ?? "Modifier \(code)"
+            if let name = Self.modifierNames[code] { return L(name) }
+            return LF("Key %d", Int(code))
         case .key(let code, let mods):
             let flags = CGEventFlags(rawValue: mods)
             var parts = ""
@@ -22,9 +23,9 @@ enum HotkeyBinding: Codable, Equatable {
             if flags.contains(.maskAlternate) { parts += "⌥" }
             if flags.contains(.maskShift) { parts += "⇧" }
             if flags.contains(.maskCommand) { parts += "⌘" }
-            return parts + (Self.keyNames[code] ?? "Key \(code)")
+            return parts + (Self.keyNames[code] ?? LF("Key %d", Int(code)))
         case .mouseButton(let n):
-            return "Mouse \(n + 1)"
+            return LF("Mouse %d", Int(n) + 1)
         }
     }
 
@@ -44,6 +45,33 @@ enum HotkeyBinding: Codable, Equatable {
         case 63: return .maskSecondaryFn
         default: return nil
         }
+    }
+
+    /// The device-specific flag bit for a modifier key code (distinguishes left/right),
+    /// so releasing right ⌘ is not confused with left ⌘ still being held.
+    static func deviceMask(for keyCode: Int64) -> UInt64? {
+        switch keyCode {
+        case 59: return 0x0001      // left Control
+        case 56: return 0x0002      // left Shift
+        case 60: return 0x0004      // right Shift
+        case 55: return 0x0008      // left Command
+        case 54: return 0x0010      // right Command
+        case 58: return 0x0020      // left Option
+        case 61: return 0x0040      // right Option
+        case 62: return 0x2000      // right Control
+        default: return nil
+        }
+    }
+
+    /// Whether the modifier belonging to `keyCode` is currently pressed in `flags`.
+    static func modifierIsDown(keyCode: Int64, flags: CGEventFlags) -> Bool {
+        if let device = deviceMask(for: keyCode) {
+            return flags.rawValue & device != 0
+        }
+        if let mask = modifierMask(for: keyCode) {
+            return flags.contains(mask)
+        }
+        return false
     }
 
     static let keyNames: [Int64: String] = [
@@ -85,14 +113,26 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     var onPTTDown: (@MainActor @Sendable () -> Void)?
     var onPTTUp: (@MainActor @Sendable (_ heldFor: TimeInterval) -> Void)?
     var onHandsFreeToggle: (@MainActor @Sendable () -> Void)?
-    /// When set, the next key or mouse press is captured instead of dispatched
-    /// (nil = cancelled with Esc). Cleared automatically after one capture.
-    var captureHandler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?
+
+    private var captureHandler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?
+    private var captureModifierCandidate: Int64?
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var retryTimer: Timer?
     private var pttPressedAt: Date?
+    private var handsFreeDown = false
+
+    /// Arms the capture mode (nil disarms). A previously armed handler is completed
+    /// with nil so its UI can reset — no capture is ever left dangling.
+    func setCaptureHandler(_ handler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?) {
+        let old = captureHandler
+        captureHandler = handler
+        captureModifierCandidate = nil
+        if let old {
+            dispatch { old(nil) }
+        }
+    }
 
     func start() {
         createTap()
@@ -179,7 +219,8 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
         }
 
         // Push-to-talk binding.
-        if let binding = pttBinding, let edge = edge(of: binding, type: type, event: event) {
+        if let binding = pttBinding,
+           let edge = edge(of: binding, type: type, event: event, wasDown: pttPressedAt != nil) {
             switch edge {
             case .down:
                 if pttPressedAt == nil {
@@ -197,9 +238,16 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
         }
 
         // Hands-free binding: toggles on press.
-        if let binding = handsFreeBinding, let edge = edge(of: binding, type: type, event: event) {
-            if edge == .down {
+        if let binding = handsFreeBinding,
+           let edge = edge(of: binding, type: type, event: event, wasDown: handsFreeDown) {
+            switch edge {
+            case .down:
+                handsFreeDown = true
                 dispatch { [onHandsFreeToggle] in onHandsFreeToggle?() }
+            case .up:
+                handsFreeDown = false
+            case .swallow:
+                break
             }
             return nil // consume press and release
         }
@@ -210,48 +258,65 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     private enum Edge { case down, up, swallow }
 
     /// Whether the event is this binding's press or release. nil = not this binding.
-    private func edge(of binding: HotkeyBinding, type: CGEventType, event: CGEvent) -> Edge? {
+    /// `wasDown` gates releases: a release only matches if we saw the press — otherwise
+    /// unrelated key-ups (e.g. plain D while ⌥D is bound) would be swallowed.
+    private func edge(of binding: HotkeyBinding, type: CGEventType, event: CGEvent,
+                      wasDown: Bool) -> Edge? {
         switch binding {
         case .modifierKey(let code):
             guard type == .flagsChanged,
-                  event.getIntegerValueField(.keyboardEventKeycode) == code,
-                  let mask = HotkeyBinding.modifierMask(for: code) else { return nil }
-            return event.flags.contains(mask) ? .down : .up
+                  event.getIntegerValueField(.keyboardEventKeycode) == code else { return nil }
+            return HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags) ? .down : .up
 
         case .key(let code, let mods):
             guard type == .keyDown || type == .keyUp,
-                  event.getIntegerValueField(.keyboardEventKeycode) == code,
-                  event.flags.rawValue & mods == mods else { return nil }
-            if type == .keyDown, event.getIntegerValueField(.keyboardEventAutorepeat) != 0 {
-                return .swallow
+                  event.getIntegerValueField(.keyboardEventKeycode) == code else { return nil }
+            if type == .keyUp {
+                // The user may release the modifier a tick before the key — match the
+                // release on the key code alone, but only if the press was ours.
+                return wasDown ? .up : nil
             }
-            return type == .keyDown ? .down : .up
+            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
+            guard event.flags.rawValue & relevant.rawValue == mods else { return nil }
+            if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return .swallow }
+            return .down
 
         case .mouseButton(let n):
             guard type == .otherMouseDown || type == .otherMouseUp,
                   event.getIntegerValueField(.mouseEventButtonNumber) == n else { return nil }
-            return type == .otherMouseDown ? .down : .up
+            if type == .otherMouseUp {
+                return wasDown ? .up : nil
+            }
+            return .down
         }
     }
+
+    // MARK: - Capture mode
 
     private func handleCapture(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         switch type {
         case .keyDown:
             let code = event.getIntegerValueField(.keyboardEventKeycode)
-            if code == 53 { // Esc cancels
+            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
+            let mods = event.flags.rawValue & relevant.rawValue
+            captureModifierCandidate = nil
+            if code == 53 && mods == 0 { // bare Esc cancels
                 finishCapture(with: nil)
                 return nil
             }
-            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
-            let mods = event.flags.rawValue & relevant.rawValue
             finishCapture(with: .key(keyCode: code, modifiers: mods))
             return nil
 
         case .flagsChanged:
+            // A modifier-only binding is taken on RELEASE (without an intervening key),
+            // so combinations like ⌘K remain recordable.
             let code = event.getIntegerValueField(.keyboardEventKeycode)
-            guard let mask = HotkeyBinding.modifierMask(for: code),
-                  event.flags.contains(mask) else { return nil } // only the press
-            finishCapture(with: .modifierKey(keyCode: code))
+            guard HotkeyBinding.modifierMask(for: code) != nil else { return nil }
+            if HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags) {
+                captureModifierCandidate = code
+            } else if captureModifierCandidate == code {
+                finishCapture(with: .modifierKey(keyCode: code))
+            }
             return nil
 
         case .otherMouseDown:
@@ -270,7 +335,9 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     private func finishCapture(with binding: HotkeyBinding?) {
         let handler = captureHandler
         captureHandler = nil
+        captureModifierCandidate = nil
         pttPressedAt = nil
+        handsFreeDown = false
         dispatch { handler?(binding) }
     }
 

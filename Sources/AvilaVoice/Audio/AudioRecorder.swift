@@ -2,6 +2,12 @@ import AVFAudio
 import AudioToolbox
 import Foundation
 
+enum RecorderError: Error, LocalizedError {
+    case noInputDevice
+
+    var errorDescription: String? { L("error.noMicrophone") }
+}
+
 /// Captures microphone audio with AVAudioEngine, publishes the input level for the
 /// waveform, and returns the recording as a 16 kHz mono WAV file for the STT engines.
 final class AudioRecorder: @unchecked Sendable {
@@ -9,9 +15,14 @@ final class AudioRecorder: @unchecked Sendable {
     private var file: AVAudioFile?
     private var converter: AVAudioConverter?
     private var startedAt: Date?
+    private var tapInstalled = false
+    private var configObserver: NSObjectProtocol?
 
     /// Called on an audio thread with the current input level (0…1).
     var onLevel: (@Sendable (Float) -> Void)?
+    /// Fired when the audio device configuration changes mid-recording
+    /// (microphone unplugged/switched) — the engine stops silently in that case.
+    var onConfigurationChange: (@Sendable () -> Void)?
 
     private(set) var currentFileURL: URL?
 
@@ -21,9 +32,17 @@ final class AudioRecorder: @unchecked Sendable {
                                             interleaved: false)!
 
     func start() throws {
+        // Defensive: never install a second tap (that would raise an ObjC exception).
+        if tapInstalled || engine.isRunning {
+            teardown()
+        }
+
         let input = engine.inputNode
         applyPreferredDevice(to: input)
         let inputFormat = input.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            throw RecorderError.noInputDevice // no input device: 0 Hz format would crash installTap
+        }
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("avila-\(UUID().uuidString).wav")
@@ -40,16 +59,31 @@ final class AudioRecorder: @unchecked Sendable {
             self.publishLevel(of: buffer)
             self.append(buffer)
         }
+        tapInstalled = true
+
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+        ) { [weak self] _ in
+            self?.onConfigurationChange?()
+        }
 
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            teardown()
+            self.file = nil
+            self.converter = nil
+            self.currentFileURL = nil
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
         startedAt = .now
     }
 
     /// Stops the recording and returns (file, duration in seconds).
     func stop() -> (url: URL, duration: Double)? {
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        teardown()
         defer {
             file = nil
             converter = nil
@@ -64,6 +98,20 @@ final class AudioRecorder: @unchecked Sendable {
     func cancel() {
         if let (url, _) = stop() {
             try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func teardown() {
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        if engine.isRunning {
+            engine.stop()
+        }
+        if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+            self.configObserver = nil
         }
     }
 

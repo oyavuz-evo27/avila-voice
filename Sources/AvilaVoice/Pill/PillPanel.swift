@@ -46,10 +46,18 @@ final class PillPanel: NSPanel {
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
-    @objc private func followTick() { reposition() }
+    @objc private func followTick() {
+        // Never jump between screens mid-dictation — the pill stays put until idle.
+        switch AppState.shared.phase {
+        case .recording, .processing: return
+        default: reposition()
+        }
+    }
+
     @objc private func screensChanged() { reposition() }
 
-    /// Bottom center of the screen with the mouse (fallback: main screen).
+    /// Bottom center of the screen with the mouse (fallback: main screen),
+    /// above the Dock (visibleFrame).
     func reposition() {
         guard let screen = NSScreen.screens.first(where: {
             NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
@@ -58,8 +66,8 @@ final class PillPanel: NSPanel {
         if frame.size != Self.panelSize {
             setContentSize(Self.panelSize)
         }
-        let origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2,
-                             y: screen.frame.minY + 8)
+        let origin = NSPoint(x: screen.visibleFrame.midX - Self.panelSize.width / 2,
+                             y: screen.visibleFrame.minY + 6)
         if frame.origin != origin {
             setFrameOrigin(origin)
         }

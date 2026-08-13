@@ -35,9 +35,12 @@ struct PillView: View {
         VStack(spacing: 6) {
             Spacer(minLength: 0)
 
-            // Bubble zone above the row: transcript preview or mode chips.
+            // Bubble zone above the row: error, transcript preview, or mode chips.
             ZStack {
-                if !isRecording, hoverCopy || hoverBubble, let last = state.history.last {
+                if case .error(let message) = state.phase {
+                    errorBubble(message)
+                        .transition(.opacity)
+                } else if showTranscriptBubble, let last = state.history.last {
                     transcriptBubble(last.finalText)
                         .onHover { over in hoverBubble = over; updateVisibility() }
                         .transition(.opacity)
@@ -48,8 +51,8 @@ struct PillView: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                accessory(leftIcon, hovering: hoverCopy)
+            HStack(spacing: 4) {
+                accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
                     .opacity(showAccessories ? 1 : 0)
                     .scaleEffect(showAccessories ? 1 : 0.6)
                     .allowsHitTesting(showAccessories)
@@ -59,6 +62,8 @@ struct PillView: View {
                 pill
 
                 accessory(text: L("Modes"), hovering: hoverModes)
+                    .help(L("Modes"))
+                    .accessibilityLabel(L("Modes"))
                     .opacity(showAccessories ? 1 : 0)
                     .scaleEffect(showAccessories ? 1 : 0.6)
                     .allowsHitTesting(showAccessories)
@@ -105,16 +110,36 @@ struct PillView: View {
         return false
     }
 
+    private var isProcessing: Bool {
+        if case .processing = state.phase { return true }
+        return false
+    }
+
+    /// The transcript preview opens when hovering the copy circle — and, right after a
+    /// dictation (result state), already when hovering the pill itself.
+    private var showTranscriptBubble: Bool {
+        guard !isRecording, !isProcessing else { return false }
+        if hoverCopy || hoverBubble { return true }
+        if case .result = state.phase { return hoverPill }
+        return false
+    }
+
     // MARK: - Accessories (circles left and right of the pill)
 
     private var leftIcon: String {
-        if isRecording { return "xmark" }
+        if isRecording || isProcessing { return "xmark" }
         return copiedFlash ? "checkmark" : "doc.on.doc"
+    }
+
+    private var leftHelp: String {
+        (isRecording || isProcessing) ? L("Cancel") : L("Copy")
     }
 
     private func leftAction() {
         if isRecording {
             state.cancelRecording()
+        } else if isProcessing {
+            state.cancelProcessing()
         } else {
             state.copyLastResult()
             copiedFlash = true
@@ -125,7 +150,7 @@ struct PillView: View {
         }
     }
 
-    private func accessory(_ icon: String, hovering: Bool) -> some View {
+    private func accessory(_ icon: String, hovering: Bool, help: String) -> some View {
         Image(systemName: icon)
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.white)
@@ -133,6 +158,8 @@ struct PillView: View {
             .background(.black.opacity(hovering ? 0.64 : 0.82), in: Circle())
             .overlay(Circle().strokeBorder(.white.opacity(hovering ? 0.25 : 0.12)))
             .contentShape(Circle())
+            .help(help)
+            .accessibilityLabel(help)
     }
 
     private func accessory(text: String, hovering: Bool) -> some View {
@@ -151,17 +178,46 @@ struct PillView: View {
     private func transcriptBubble(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11))
-            .foregroundStyle(.white)
+            .foregroundStyle(.primary)
             .lineLimit(8)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .frame(maxWidth: 300, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
-            .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.12)))
     }
 
+    private func errorBubble(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(warmPink)
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: 300)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(warmPink.opacity(0.4)))
+    }
+
+    /// Mode chips fit in one row when possible; with many custom modes they scroll
+    /// horizontally instead of being clipped invisibly.
     private var modeChips: some View {
+        ViewThatFits(in: .horizontal) {
+            chipsRow
+            ScrollView(.horizontal, showsIndicators: false) {
+                chipsRow.padding(.horizontal, 2)
+            }
+            .frame(width: 350)
+        }
+    }
+
+    private var chipsRow: some View {
         HStack(spacing: 4) {
             ForEach(state.modes) { mode in
                 Button {
@@ -177,10 +233,12 @@ struct PillView: View {
                         .background(
                             state.selectedModeID == mode.id
                                 ? AnyShapeStyle(.white.opacity(0.9))
-                                : AnyShapeStyle(.black.opacity(0.82)),
+                                : AnyShapeStyle(.ultraThinMaterial),
                             in: Capsule())
                         .foregroundStyle(
-                            state.selectedModeID == mode.id ? .black : .white)
+                            state.selectedModeID == mode.id
+                                ? AnyShapeStyle(.black)
+                                : AnyShapeStyle(.primary))
                         .overlay(Capsule().strokeBorder(.white.opacity(0.15)))
                 }
                 .buttonStyle(.plain)
@@ -199,6 +257,7 @@ struct PillView: View {
             case .processing:
                 ProgressView()
                     .controlSize(.small)
+                    .tint(.white)
                     .frame(width: 52, height: 17)
             case .result(let inserted):
                 Image(systemName: inserted ? "checkmark" : "doc.on.clipboard")
@@ -207,7 +266,7 @@ struct PillView: View {
             case .error:
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(warmPink)
                     .frame(width: 52, height: 17)
             case .idle:
                 idleLine
@@ -225,7 +284,8 @@ struct PillView: View {
         .scaleEffect(hoverPill ? 1.03 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hoverPill)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: state.phase)
-        .contentShape(Capsule())
+        .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
+        .contentShape(Rectangle())
         .onHover { over in hoverPill = over; updateVisibility() }
         .onTapGesture {
             // Click on the pill = toggle recording (same as a hotkey tap).
@@ -253,9 +313,13 @@ struct PillView: View {
             }
             .frame(width: 26, height: 4)
             .onAppear {
+                // Reset and animate in SEPARATE update cycles — otherwise the second
+                // appearance nets to "no change" and repeatForever never starts.
                 idlePulse = false
-                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                    idlePulse = true
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                        idlePulse = true
+                    }
                 }
             }
     }
@@ -269,13 +333,17 @@ struct PillView: View {
         }
         .shadow(color: warmPink.opacity(0.22), radius: 4)
         .onAppear {
+            // Reset and animate in SEPARATE update cycles — otherwise the second
+            // recording nets to "no change" and the shimmer freezes.
             orbitA = 0
             orbitB = 180
-            withAnimation(.linear(duration: 12.0).repeatForever(autoreverses: false)) {
-                orbitA = 360
-            }
-            withAnimation(.linear(duration: 17.0).repeatForever(autoreverses: false)) {
-                orbitB = 540
+            DispatchQueue.main.async {
+                withAnimation(.linear(duration: 12.0).repeatForever(autoreverses: false)) {
+                    orbitA = 360
+                }
+                withAnimation(.linear(duration: 17.0).repeatForever(autoreverses: false)) {
+                    orbitB = 540
+                }
             }
         }
     }
