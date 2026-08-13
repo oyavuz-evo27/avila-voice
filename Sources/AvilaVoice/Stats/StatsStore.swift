@@ -25,7 +25,10 @@ final class StatsStore: ObservableObject {
         }
         if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode([StatsEntry].self, from: data) {
-            entries = decoded
+            // Keep ~13 months — enough for every summary view, bounded launch cost.
+            let cutoff = Calendar.current.date(byAdding: .day, value: -400, to: .now) ?? .distantPast
+            entries = decoded.filter { $0.date >= cutoff }
+            if entries.count != decoded.count { persist() }
         }
     }
 
