@@ -15,9 +15,7 @@ final class FoundationModelsEngine: EnhancementEngine {
                  dictionary: [String],
                  context: DictationContext?) async throws -> String {
         guard SystemLanguageModel.default.availability == .available else {
-            throw EnhancementError.engineUnavailable(
-                "Apple Intelligence is not available on this Mac. " +
-                "Enable it in System Settings → Apple Intelligence & Siri.")
+            throw EnhancementError.engineUnavailable(L("error.appleIntelligence"))
         }
         let session = LanguageModelSession(instructions: mode.systemPrompt)
         let prompt = PromptBuilder.userPrompt(transcript: transcript,

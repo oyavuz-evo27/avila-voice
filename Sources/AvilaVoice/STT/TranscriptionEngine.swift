@@ -7,7 +7,7 @@ enum TranscriptionError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .engineUnavailable(let reason): return reason
-        case .emptyResult: return "No speech was recognized."
+        case .emptyResult: return L("error.noSpeech")
         }
     }
 }

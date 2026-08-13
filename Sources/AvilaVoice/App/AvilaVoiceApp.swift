@@ -53,36 +53,36 @@ struct MenuContent: View {
     var body: some View {
         Group {
             if case .recording = state.phase {
-                Button("Stop Dictation") { state.finishRecording() }
-                Button("Cancel Dictation") { state.cancelRecording() }
+                Button(L("Stop Dictation")) { state.finishRecording() }
+                Button(L("Cancel Dictation")) { state.cancelRecording() }
             } else {
-                Button("Start Dictation") { state.startRecording() }
+                Button(L("Start Dictation")) { state.startRecording() }
             }
 
             Divider()
 
-            Picker("Mode", selection: $state.selectedModeID) {
+            Picker(L("Mode"), selection: $state.selectedModeID) {
                 ForEach(state.modes) { mode in
-                    Text(mode.name).tag(mode.id)
+                    Text(mode.displayName).tag(mode.id)
                 }
             }
 
             Divider()
 
             if let last = state.history.last {
-                Button("Copy Last Dictation") { state.copyLastResult() }
+                Button(L("Copy Last Dictation")) { state.copyLastResult() }
                     .help(last.finalText)
             }
 
-            Button("Settings…") { openSettings() }
+            Button(L("Settings…")) { openSettings() }
 
             Divider()
 
-            Button("Check for Updates…") {
+            Button(L("Check for Updates…")) {
                 NSWorkspace.shared.open(
                     URL(string: "https://github.com/oyavuz-evo27/avila-voice/releases")!)
             }
-            Button("Quit Avila Voice") { NSApp.terminate(nil) }
+            Button(L("Quit Avila Voice")) { NSApp.terminate(nil) }
         }
     }
 }

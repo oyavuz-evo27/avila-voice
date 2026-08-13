@@ -1,0 +1,52 @@
+/* Menüleiste */
+"Start Dictation" = "Diktat starten";
+"Stop Dictation" = "Diktat beenden";
+"Cancel Dictation" = "Diktat abbrechen";
+"Mode" = "Modus";
+"Copy Last Dictation" = "Letztes Diktat kopieren";
+"Settings…" = "Einstellungen …";
+"Check for Updates…" = "Nach Updates suchen …";
+"Quit Avila Voice" = "Avila Voice beenden";
+
+/* Pille */
+"Done" = "Fertig";
+"Cancel" = "Abbrechen";
+"Copy" = "Kopieren";
+
+/* Modi */
+"mode.standard" = "Standard";
+"mode.email" = "E-Mail";
+"mode.translate" = "Übersetzen";
+
+/* Einstellungen */
+"General" = "Allgemein";
+"Modes" = "Modi";
+"Dictionary" = "Wörterbuch";
+"Statistics" = "Statistik";
+"Dictation language" = "Diktatsprache";
+"German" = "Deutsch";
+"English" = "Englisch";
+"Play sounds on start/stop" = "Töne bei Start/Stopp abspielen";
+"Hotkey" = "Kurzbefehl";
+"Right ⌘" = "Rechte ⌘";
+"Right ⌥" = "Rechte ⌥";
+"hotkey.hint" = "Halten = Push-to-talk, kurz drücken = Ein/Aus. Freie Tastenwahl folgt in einer späteren Version.";
+"built-in" = "integriert";
+"context.help" = "Nutzt Kontext (App, Auswahl, Zwischenablage)";
+"modes.hint" = "Eigene Modi anlegen folgt in einer späteren Version.";
+"dictionary.hint" = "Fachbegriffe und Namen, die korrekt geschrieben werden müssen (gilt für alle Modi):";
+"dictionary.placeholder" = "Neues Wort (z. B. Navision)";
+"Add" = "Hinzufügen";
+"Today" = "Heute";
+"Last 7 days" = "Letzte 7 Tage";
+"Last 30 days" = "Letzte 30 Tage";
+"%d words" = "%d Wörter";
+"saved %d min" = "%d Min. gespart";
+"Assumed typing speed" = "Angenommene Tippgeschwindigkeit";
+"%d wpm" = "%d WPM";
+
+/* Fehler */
+"error.noSpeech" = "Es wurde keine Sprache erkannt.";
+"error.microphone" = "Mikrofonfehler: %@";
+"error.sttLocale" = "SpeechAnalyzer unterstützt diese Sprache nicht.";
+"error.appleIntelligence" = "Apple Intelligence ist auf diesem Mac nicht verfügbar. Aktivieren Sie es in den Systemeinstellungen → Apple Intelligence & Siri.";

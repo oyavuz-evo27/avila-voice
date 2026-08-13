@@ -87,7 +87,7 @@ struct PillView: View {
                     Button {
                         state.selectedModeID = mode.id
                     } label: {
-                        Text(mode.name)
+                        Text(mode.displayName)
                             .font(.system(size: 10, weight: .medium))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
@@ -105,8 +105,8 @@ struct PillView: View {
 
             if case .recording = state.phase {
                 HStack(spacing: 6) {
-                    Button("Done") { state.finishRecording() }
-                    Button("Cancel") { state.cancelRecording() }
+                    Button(L("Done")) { state.finishRecording() }
+                    Button(L("Cancel")) { state.cancelRecording() }
                 }
                 .font(.system(size: 10))
                 .buttonStyle(.plain)
@@ -120,7 +120,7 @@ struct PillView: View {
                     Button {
                         state.copyLastResult()
                     } label: {
-                        Label("Copy", systemImage: "doc.on.doc")
+                        Label(L("Copy"), systemImage: "doc.on.doc")
                             .font(.system(size: 10, weight: .medium))
                     }
                     .buttonStyle(.plain)

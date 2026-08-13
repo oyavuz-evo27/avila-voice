@@ -45,8 +45,7 @@ final class SpeechAnalyzerEngine: TranscriptionEngine {
         guard await SpeechTranscriber.supportedLocales.contains(where: {
             $0.identifier(.bcp47) == locale.identifier(.bcp47)
         }) else {
-            throw TranscriptionError.engineUnavailable(
-                "SpeechAnalyzer does not support locale \(locale.identifier).")
+            throw TranscriptionError.engineUnavailable(L("error.sttLocale"))
         }
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await request.downloadAndInstall()

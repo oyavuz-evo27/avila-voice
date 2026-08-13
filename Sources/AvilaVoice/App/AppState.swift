@@ -85,7 +85,7 @@ final class AppState: ObservableObject {
             phase = .recording
             Sounds.playStart()
         } catch {
-            phase = .error("Microphone error: \(error.localizedDescription)")
+            phase = .error(LF("error.microphone", error.localizedDescription))
         }
     }
 
@@ -135,7 +135,7 @@ final class AppState: ObservableObject {
         let words = final.split { $0.isWhitespace || $0.isNewline }.count
         stats.record(words: words, speakingSeconds: duration)
         history.add(DictationRecord(rawTranscript: raw, finalText: final,
-                                    modeName: mode.name, wasInserted: inserted,
+                                    modeName: mode.displayName, wasInserted: inserted,
                                     durationSeconds: duration))
         phase = .result(inserted: inserted)
         // Return to idle after a grace period (pill hover keeps the text reachable).

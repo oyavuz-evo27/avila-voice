@@ -1,0 +1,52 @@
+/* Menu bar */
+"Start Dictation" = "Start Dictation";
+"Stop Dictation" = "Stop Dictation";
+"Cancel Dictation" = "Cancel Dictation";
+"Mode" = "Mode";
+"Copy Last Dictation" = "Copy Last Dictation";
+"Settings…" = "Settings…";
+"Check for Updates…" = "Check for Updates…";
+"Quit Avila Voice" = "Quit Avila Voice";
+
+/* Pill */
+"Done" = "Done";
+"Cancel" = "Cancel";
+"Copy" = "Copy";
+
+/* Modes */
+"mode.standard" = "Standard";
+"mode.email" = "E-Mail";
+"mode.translate" = "Translate";
+
+/* Settings */
+"General" = "General";
+"Modes" = "Modes";
+"Dictionary" = "Dictionary";
+"Statistics" = "Statistics";
+"Dictation language" = "Dictation language";
+"German" = "German";
+"English" = "English";
+"Play sounds on start/stop" = "Play sounds on start/stop";
+"Hotkey" = "Hotkey";
+"Right ⌘" = "Right ⌘";
+"Right ⌥" = "Right ⌥";
+"hotkey.hint" = "Hold to talk, tap to toggle. Custom hotkey configuration follows in a later build.";
+"built-in" = "built-in";
+"context.help" = "Uses context (app, selection, clipboard)";
+"modes.hint" = "Creating custom modes follows in a later build.";
+"dictionary.hint" = "Technical terms and names that must be spelled correctly (applies to all modes):";
+"dictionary.placeholder" = "New word (e.g. Navision)";
+"Add" = "Add";
+"Today" = "Today";
+"Last 7 days" = "Last 7 days";
+"Last 30 days" = "Last 30 days";
+"%d words" = "%d words";
+"saved %d min" = "saved %d min";
+"Assumed typing speed" = "Assumed typing speed";
+"%d wpm" = "%d wpm";
+
+/* Errors */
+"error.noSpeech" = "No speech was recognized.";
+"error.microphone" = "Microphone error: %@";
+"error.sttLocale" = "SpeechAnalyzer does not support this language.";
+"error.appleIntelligence" = "Apple Intelligence is not available on this Mac. Enable it in System Settings → Apple Intelligence & Siri.";

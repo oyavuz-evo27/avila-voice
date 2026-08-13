@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "AvilaVoice",
+    defaultLocalization: "en",
     platforms: [
         .macOS("26.0")
     ],
@@ -11,7 +12,9 @@ let package = Package(
             name: "AvilaVoice",
             path: "Sources/AvilaVoice",
             resources: [
-                .copy("Resources/MenuBarIcon.png")
+                .copy("Resources/MenuBarIcon.png"),
+                .copy("Resources/en.lproj"),
+                .copy("Resources/de.lproj")
             ]
         )
     ]

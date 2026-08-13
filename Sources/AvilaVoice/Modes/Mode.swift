@@ -8,6 +8,17 @@ struct Mode: Identifiable, Codable, Equatable {
     var useContext: Bool
     var isBuiltin: Bool
 
+    /// Localized name for built-in modes; custom modes keep the user's name.
+    var displayName: String {
+        guard isBuiltin else { return name }
+        switch id {
+        case Mode.standard.id: return L("mode.standard")
+        case Mode.email.id: return L("mode.email")
+        case Mode.translate.id: return L("mode.translate")
+        default: return name
+        }
+    }
+
     init(id: UUID = UUID(), name: String, systemPrompt: String,
          useContext: Bool = false, isBuiltin: Bool = false) {
         self.id = id

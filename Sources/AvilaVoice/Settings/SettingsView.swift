@@ -4,13 +4,13 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettings()
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .tabItem { Label(L("General"), systemImage: "gearshape") }
             ModesSettings()
-                .tabItem { Label("Modes", systemImage: "wand.and.stars") }
+                .tabItem { Label(L("Modes"), systemImage: "wand.and.stars") }
             DictionarySettings()
-                .tabItem { Label("Dictionary", systemImage: "character.book.closed") }
+                .tabItem { Label(L("Dictionary"), systemImage: "character.book.closed") }
             StatsSettings()
-                .tabItem { Label("Statistics", systemImage: "chart.bar") }
+                .tabItem { Label(L("Statistics"), systemImage: "chart.bar") }
         }
         .frame(width: 480, height: 360)
     }
@@ -22,13 +22,13 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Picker("Dictation language", selection: $sttLocale) {
-                Text("German").tag("de-DE")
-                Text("English").tag("en-US")
+            Picker(L("Dictation language"), selection: $sttLocale) {
+                Text(L("German")).tag("de-DE")
+                Text(L("English")).tag("en-US")
             }
-            Toggle("Play sounds on start/stop", isOn: $soundsEnabled)
-            LabeledContent("Hotkey", value: HotkeyBinding.default.displayName)
-            Text("Hold to talk, tap to toggle. Custom hotkey configuration follows in a later build.")
+            Toggle(L("Play sounds on start/stop"), isOn: $soundsEnabled)
+            LabeledContent(L("Hotkey"), value: L(HotkeyBinding.default.displayName))
+            Text(L("hotkey.hint"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -46,16 +46,16 @@ struct ModesSettings: View {
                 ForEach(state.modes) { mode in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text(mode.name).font(.headline)
+                            Text(mode.displayName).font(.headline)
                             if mode.isBuiltin {
-                                Text("built-in")
+                                Text(L("built-in"))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                             if mode.useContext {
                                 Image(systemName: "eye")
                                     .font(.caption2)
-                                    .help("Uses context (app, selection, clipboard)")
+                                    .help(L("context.help"))
                             }
                         }
                         Text(mode.systemPrompt)
@@ -65,7 +65,7 @@ struct ModesSettings: View {
                     }
                 }
             }
-            Text("Creating custom modes follows in a later build.")
+            Text(L("modes.hint"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -80,7 +80,7 @@ struct DictionarySettings: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Technical terms and names that must be spelled correctly (applies to all modes):")
+            Text(L("dictionary.hint"))
                 .font(.caption)
             List {
                 ForEach(state.dictionaryWords, id: \.self) { word in
@@ -92,9 +92,9 @@ struct DictionarySettings: View {
                 }
             }
             HStack {
-                TextField("New word (e.g. Navision)", text: $newWord)
+                TextField(L("dictionary.placeholder"), text: $newWord)
                     .onSubmit(addWord)
-                Button("Add", action: addWord)
+                Button(L("Add"), action: addWord)
                     .disabled(newWord.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
@@ -115,9 +115,9 @@ struct StatsSettings: View {
 
     var body: some View {
         Form {
-            statsRow("Today", state.stats.today)
-            statsRow("Last 7 days", state.stats.thisWeek)
-            statsRow("Last 30 days", state.stats.thisMonth)
+            statsRow(L("Today"), state.stats.today)
+            statsRow(L("Last 7 days"), state.stats.thisWeek)
+            statsRow(L("Last 30 days"), state.stats.thisMonth)
             Section {
                 TypingSpeedField()
             }
@@ -130,8 +130,8 @@ struct StatsSettings: View {
     private func statsRow(_ label: String, _ summary: StatsStore.Summary) -> some View {
         LabeledContent(label) {
             VStack(alignment: .trailing) {
-                Text("\(summary.words) words")
-                Text("saved \(Int(summary.savedSeconds / 60)) min")
+                Text(LF("%d words", summary.words))
+                Text(LF("saved %d min", Int(summary.savedSeconds / 60)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -145,9 +145,9 @@ struct TypingSpeedField: View {
 
     var body: some View {
         HStack {
-            Text("Assumed typing speed")
+            Text(L("Assumed typing speed"))
             Slider(value: $wpm, in: 20...90, step: 5)
-            Text("\(Int(wpm)) wpm")
+            Text(LF("%d wpm", Int(wpm)))
                 .monospacedDigit()
         }
         .onAppear { wpm = state.stats.typingWordsPerMinute }

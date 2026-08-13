@@ -1,0 +1,2 @@
+"NSMicrophoneUsageDescription" = "Avila Voice records your voice to transcribe it into text — entirely on this Mac.";
+"NSSpeechRecognitionUsageDescription" = "Avila Voice transcribes your dictation on-device. Nothing is sent to a server.";
