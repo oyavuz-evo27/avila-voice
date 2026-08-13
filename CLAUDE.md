@@ -86,4 +86,14 @@ unter „Lokal" ergänzen).
   Konkurrenz-Features (Wispr Flow, Spokenly, VoiceInk, Voicely), lokale STT-Modelle
   (Parakeet v3, SpeechAnalyzer, Whisper, Nemotron) und lokale LLMs (Foundation Models,
   Qwen3.5, Gemma 4) durch Subagenten. Alle Architektur-Entscheidungen fixiert (s. o.).
-  Scaffold: SwiftPM-Projekt ohne Xcode, App-Skelett begonnen.
+  Scaffold komplett und **buildfähig** (swift build + make app erfolgreich): Menüleiste,
+  Pille (Panel + Waveform + Hover), AudioRecorder (AVAudioEngine → 16-kHz-WAV),
+  HotkeyManager (CGEventTap, PTT/Toggle, Maustasten), SpeechAnalyzer-Engine,
+  Foundation-Models-Engine, 3 Modi, Texteinfügung (AX + Paste/Clipboard-Restore),
+  Verlauf (5), Statistik, Wörterbuch, Settings-Fenster, Release-Workflow.
+  Repo öffentlich: https://github.com/oyavuz-evo27/avila-voice
+  **Ungetestet zur Laufzeit** — erster interaktiver Test durch User steht aus
+  (Berechtigungen: Mikrofon, Bedienungshilfen, Eingabemonitoring).
+  Nächste Schritte: Laufzeit-Test + Fehlerbehebung, Hotkey-Recorder-UI, Custom-Modes-UI,
+  Parakeet-Engine (FluidAudio), Screenshot-OCR-Kontext, App-Icon, deutsche Lokalisierung,
+  MLX-/Qwen-Stufe, erster Release (v0.1.0-Tag).
