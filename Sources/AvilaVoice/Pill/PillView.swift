@@ -97,6 +97,15 @@ struct PillView: View {
         .scaleEffect(hoveringPill ? 1.07 : 1.0)
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: hoveringPill)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: state.phase)
+        .contentShape(Capsule())
+        .onTapGesture {
+            // Click on the pill = toggle recording (same as a hotkey tap).
+            switch state.phase {
+            case .recording: state.finishRecording()
+            case .processing: break
+            default: state.startRecording()
+            }
+        }
     }
 
     /// Elegant, subtle warm rim while recording: orange-red → red-pink gradient stroke
