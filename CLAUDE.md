@@ -95,5 +95,11 @@ unter „Lokal" ergänzen).
   **Ungetestet zur Laufzeit** — erster interaktiver Test durch User steht aus
   (Berechtigungen: Mikrofon, Bedienungshilfen, Eingabemonitoring).
   Nächste Schritte: Laufzeit-Test + Fehlerbehebung, Hotkey-Recorder-UI, Custom-Modes-UI,
-  Parakeet-Engine (FluidAudio), Screenshot-OCR-Kontext, App-Icon, deutsche Lokalisierung,
+  Parakeet-Engine (FluidAudio), Screenshot-OCR-Kontext, deutsche Lokalisierung,
   MLX-/Qwen-Stufe, erster Release (v0.1.0-Tag).
+- **2026-08-13 (Nachmittag)** — App-Icon aus Onurs Amosia-Logo (Waveform) erzeugt:
+  Silber/Graphit, macOS-26-Stil (`Scripts/make_icon.swift` → AppIcon.icns +
+  Menüleisten-Template-Icon). Diagnose-Skript (`Scripts/diagnose.swift`) bestätigt auf
+  dem Mini: Foundation Models VERFÜGBAR, SpeechAnalyzer de/en installiert. App gestartet.
+  Hinweis: Ad-hoc-Signatur ⇒ nach jedem Rebuild können Bedienungshilfen/
+  Eingabemonitoring-Freigaben neu zu setzen sein (später: eigenes Signatur-Zertifikat).
