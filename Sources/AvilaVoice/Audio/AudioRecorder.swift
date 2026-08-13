@@ -1,4 +1,5 @@
 import AVFAudio
+import AudioToolbox
 import Foundation
 
 /// Captures microphone audio with AVAudioEngine, publishes the input level for the
@@ -21,6 +22,7 @@ final class AudioRecorder: @unchecked Sendable {
 
     func start() throws {
         let input = engine.inputNode
+        applyPreferredDevice(to: input)
         let inputFormat = input.outputFormat(forBus: 0)
 
         let url = FileManager.default.temporaryDirectory
@@ -63,6 +65,20 @@ final class AudioRecorder: @unchecked Sendable {
         if let (url, _) = stop() {
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    /// Routes the input node to the microphone chosen in settings (empty = system default).
+    private func applyPreferredDevice(to input: AVAudioInputNode) {
+        guard let uid = UserDefaults.standard.string(forKey: "audio.inputDeviceUID"),
+              !uid.isEmpty,
+              let deviceID = AudioDeviceManager.deviceID(forUID: uid),
+              let unit = input.audioUnit else { return }
+        var device = deviceID
+        AudioUnitSetProperty(unit,
+                             kAudioOutputUnitProperty_CurrentDevice,
+                             kAudioUnitScope_Global, 0,
+                             &device,
+                             UInt32(MemoryLayout<AudioDeviceID>.size))
     }
 
     private func publishLevel(of buffer: AVAudioPCMBuffer) {

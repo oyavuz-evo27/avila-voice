@@ -80,6 +80,7 @@ final class AppState: ObservableObject {
 
     func startRecording() {
         guard phase != .recording else { return }
+        PillPanel.shared.reposition() // jump to the screen the user is working on
         do {
             try recorder.start()
             phase = .recording

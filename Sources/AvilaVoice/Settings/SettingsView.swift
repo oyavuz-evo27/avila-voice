@@ -19,9 +19,18 @@ struct SettingsView: View {
 struct GeneralSettings: View {
     @AppStorage("sounds.enabled") private var soundsEnabled = true
     @AppStorage("stt.locale") private var sttLocale = "de-DE"
+    @AppStorage("audio.inputDeviceUID") private var micUID = ""
+    @State private var devices: [AudioInputDevice] = []
 
     var body: some View {
         Form {
+            Picker(L("Microphone"), selection: $micUID) {
+                Text(L("System default")).tag("")
+                ForEach(devices) { device in
+                    Text(device.name).tag(device.uid)
+                }
+            }
+            .onAppear { devices = AudioDeviceManager.inputDevices() }
             Picker(L("Dictation language"), selection: $sttLocale) {
                 Text(L("German")).tag("de-DE")
                 Text(L("English")).tag("en-US")
