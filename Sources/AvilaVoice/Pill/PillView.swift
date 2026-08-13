@@ -15,11 +15,11 @@ struct PillView: View {
     @State private var copiedFlash = false
     @State private var orbitA: Double = 0
     @State private var orbitB: Double = 180
-    @State private var bars: [CGFloat] = Array(repeating: 0, count: 21)
+    @State private var bars: [CGFloat] = Array(repeating: 0, count: 19)
 
     /// Center-weighted envelope: middle bars swing the most, outer ones stay calm.
     private static let barWeights: [CGFloat] = {
-        let n = 21
+        let n = 19
         let mid = CGFloat(n - 1) / 2
         return (0..<n).map { i in
             let x = (CGFloat(i) - mid) / mid
@@ -194,7 +194,7 @@ struct PillView: View {
             switch state.phase {
             case .recording:
                 waveform
-                    .frame(width: 116, height: 24)
+                    .frame(width: 100, height: 24)
             case .processing:
                 ProgressView()
                     .controlSize(.small)
@@ -211,8 +211,8 @@ struct PillView: View {
             case .idle:
                 Capsule()
                     .fill(.white.opacity(hoverPill ? 0.55 : 0.35))
-                    .frame(width: 32, height: 4)
-                    .frame(width: 52, height: 11)
+                    .frame(width: 26, height: 4)
+                    .frame(width: 42, height: 11)
             }
         }
         .foregroundStyle(.white)
@@ -249,10 +249,10 @@ struct PillView: View {
         .onAppear {
             orbitA = 0
             orbitB = 180
-            withAnimation(.linear(duration: 11.0).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 12.0).repeatForever(autoreverses: false)) {
                 orbitA = 360
             }
-            withAnimation(.linear(duration: 15.0).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 17.0).repeatForever(autoreverses: false)) {
                 orbitB = 540
             }
         }
