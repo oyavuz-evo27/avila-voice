@@ -68,13 +68,18 @@ enum HotkeyRole: String {
 /// Listens system-wide (CGEventTap) for the configured triggers.
 /// Push-to-talk: hold to record (a short tap toggles instead). Hands-free: tap toggles.
 /// Also provides a capture mode for the settings hotkey recorder.
-/// Needs Input Monitoring / Accessibility permission.
-final class HotkeyManager: @unchecked Sendable {
+/// Needs Input Monitoring / Accessibility permission — creation is retried until the
+/// user has granted it, so no app restart is required after granting.
+final class HotkeyManager: NSObject, @unchecked Sendable {
     /// Below this press duration (seconds) a press counts as a tap.
     static let tapThreshold: TimeInterval = 0.35
 
     var pttBinding: HotkeyBinding?
     var handsFreeBinding: HotkeyBinding?
+
+    /// True while the event tap is installed and listening.
+    private(set) var isActive = false
+    var onStatusChange: (@MainActor @Sendable (Bool) -> Void)?
 
     /// Callbacks arrive on the main thread.
     var onPTTDown: (@MainActor @Sendable () -> Void)?
@@ -86,9 +91,35 @@ final class HotkeyManager: @unchecked Sendable {
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var retryTimer: Timer?
     private var pttPressedAt: Date?
 
     func start() {
+        createTap()
+        if tap == nil {
+            NSLog("AvilaVoice: event tap unavailable — waiting for Accessibility/Input Monitoring permission")
+            let timer = Timer(timeInterval: 3.0, target: self,
+                              selector: #selector(retryTick), userInfo: nil, repeats: true)
+            RunLoop.main.add(timer, forMode: .common)
+            retryTimer = timer
+        }
+    }
+
+    @objc private func retryTick() {
+        guard tap == nil else {
+            retryTimer?.invalidate()
+            retryTimer = nil
+            return
+        }
+        createTap()
+        if tap != nil {
+            NSLog("AvilaVoice: event tap installed after permission grant")
+            retryTimer?.invalidate()
+            retryTimer = nil
+        }
+    }
+
+    private func createTap() {
         guard tap == nil else { return }
         let mask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) |
@@ -109,19 +140,29 @@ final class HotkeyManager: @unchecked Sendable {
                                 callback: callback,
                                 userInfo: Unmanaged.passUnretained(self).toOpaque())
         guard let tap else {
-            NSLog("AvilaVoice: could not create event tap — missing Input Monitoring permission?")
+            setActive(false)
             return
         }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        setActive(true)
     }
 
     func stop() {
+        retryTimer?.invalidate()
+        retryTimer = nil
         if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
         if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
         tap = nil
         runLoopSource = nil
+        setActive(false)
+    }
+
+    private func setActive(_ active: Bool) {
+        guard isActive != active else { return }
+        isActive = active
+        dispatch { [onStatusChange] in onStatusChange?(active) }
     }
 
     // MARK: - Event handling

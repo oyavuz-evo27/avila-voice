@@ -22,7 +22,12 @@ for lproj in "$ROOT"/Resources/*.lproj; do
     [ -d "$lproj" ] && cp -R "$lproj" "$APP/Contents/Resources/"
 done
 
-# Ad-hoc signature: required so macOS TCC (mic/accessibility) remembers permissions.
-codesign --force --sign - "$APP"
+# Ad-hoc signature with a STABLE designated requirement (identifier only, no cdhash):
+# macOS TCC validates apps against this requirement, so Accessibility/Input-Monitoring
+# grants survive rebuilds even without a paid certificate.
+codesign --force --sign - \
+    --identifier com.onuryavuz.avila-voice \
+    --requirements '=designated => identifier "com.onuryavuz.avila-voice"' \
+    "$APP"
 
 echo "built: $APP"

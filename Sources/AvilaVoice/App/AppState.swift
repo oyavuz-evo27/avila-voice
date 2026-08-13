@@ -21,6 +21,7 @@ final class AppState: ObservableObject {
     @Published var dictionaryWords: [String] = []
     @Published var pttBinding: HotkeyBinding?
     @Published var handsFreeBinding: HotkeyBinding?
+    @Published var hotkeysActive = false
 
     let history = HistoryStore()
     let stats = StatsStore()
@@ -53,6 +54,7 @@ final class AppState: ObservableObject {
         hotkeys.onPTTDown = { [weak self] in self?.hotkeyDown() }
         hotkeys.onPTTUp = { [weak self] held in self?.hotkeyUp(heldFor: held) }
         hotkeys.onHandsFreeToggle = { [weak self] in self?.handsFreeToggle() }
+        hotkeys.onStatusChange = { [weak self] active in self?.hotkeysActive = active }
         hotkeys.start()
         Task.detached { [sttEngine] in await sttEngine.warmUp() }
     }

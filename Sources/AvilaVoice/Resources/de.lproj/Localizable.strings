@@ -32,6 +32,10 @@
 "Hotkey" = "Kurzbefehl";
 "Right ⌘" = "Rechte ⌘";
 "Right ⌥" = "Rechte ⌥";
+"Global hotkeys" = "Globale Kurzbefehle";
+"Active" = "Aktiv";
+"hotkeys.inactive" = "Inaktiv — Bedienungshilfen und Eingabemonitoring freigeben";
+"Open System Settings" = "Systemeinstellungen öffnen";
 "Push-to-talk" = "Push-to-talk";
 "Hands-free" = "Hands-free";
 "Press key…" = "Taste drücken …";

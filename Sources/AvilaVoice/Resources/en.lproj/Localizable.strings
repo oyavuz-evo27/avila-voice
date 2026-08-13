@@ -32,6 +32,10 @@
 "Hotkey" = "Hotkey";
 "Right ⌘" = "Right ⌘";
 "Right ⌥" = "Right ⌥";
+"Global hotkeys" = "Global hotkeys";
+"Active" = "Active";
+"hotkeys.inactive" = "Inactive — grant Accessibility and Input Monitoring";
+"Open System Settings" = "Open System Settings";
 "Push-to-talk" = "Push-to-talk";
 "Hands-free" = "Hands-free";
 "Press key…" = "Press a key…";

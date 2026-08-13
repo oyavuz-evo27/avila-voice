@@ -40,6 +40,7 @@ struct GeneralSettings: View {
                 Toggle(L("Play sounds on start/stop"), isOn: $soundsEnabled)
             }
             Section {
+                HotkeyStatusRow()
                 HotkeyRecorderRow(title: L("Push-to-talk"), role: .pushToTalk)
                 HotkeyRecorderRow(title: L("Hands-free"), role: .handsFree)
                 Text(L("hotkey.hint"))
@@ -50,6 +51,29 @@ struct GeneralSettings: View {
         .formStyle(.grouped)
         .padding()
         .onAppear { devices = AudioDeviceManager.inputDevices() }
+    }
+}
+
+/// Shows whether the global event tap is running; if not, offers the privacy pane.
+struct HotkeyStatusRow: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        LabeledContent(L("Global hotkeys")) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(state.hotkeysActive ? .green : .red)
+                    .frame(width: 8, height: 8)
+                Text(state.hotkeysActive ? L("Active") : L("hotkeys.inactive"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !state.hotkeysActive {
+                    Button(L("Open System Settings")) {
+                        PermissionRequester.openPrivacySettings()
+                    }
+                }
+            }
+        }
     }
 }
 

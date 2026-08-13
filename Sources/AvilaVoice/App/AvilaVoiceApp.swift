@@ -1,4 +1,5 @@
 import AppKit
+import IOKit.hid
 import SwiftUI
 
 @main
@@ -104,5 +105,15 @@ enum PermissionRequester {
         // Accessibility (text insertion + hotkeys) must be granted manually:
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
+        // Input Monitoring (global event tap):
+        if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
+            IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        }
+    }
+
+    static func openPrivacySettings() {
+        let url = URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 }
