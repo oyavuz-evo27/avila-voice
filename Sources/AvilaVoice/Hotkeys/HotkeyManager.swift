@@ -12,27 +12,29 @@ enum HotkeyBinding: Equatable {
     static let defaultPushToTalk = HotkeyBinding.modifierKey(keyCode: 54)  // right ⌘
     static let defaultHandsFree = HotkeyBinding.modifierKey(keyCode: 61)   // right ⌥
 
+    /// Every component is joined with " + " (e.g. "⌥ + K", "Fn + Rechte ⌘").
     var displayName: String {
         switch self {
         case .modifierKey(let code, let extra):
             let name = Self.modifierNames[code].map { L($0) } ?? LF("Key %d", Int(code))
-            let prefix = Self.flagSymbols(CGEventFlags(rawValue: extra))
-            return prefix.isEmpty ? name : "\(prefix) + \(name)"
+            return (Self.flagSymbols(CGEventFlags(rawValue: extra)) + [name])
+                .joined(separator: " + ")
         case .key(let code, let mods):
-            let prefix = Self.flagSymbols(CGEventFlags(rawValue: mods))
-            return prefix + (Self.keyNames[code] ?? LF("Key %d", Int(code)))
+            let name = Self.keyNames[code] ?? LF("Key %d", Int(code))
+            return (Self.flagSymbols(CGEventFlags(rawValue: mods)) + [name])
+                .joined(separator: " + ")
         case .mouseButton(let n):
             return LF("Mouse %d", Int(n) + 1)
         }
     }
 
-    private static func flagSymbols(_ flags: CGEventFlags) -> String {
-        var parts = ""
-        if flags.contains(.maskSecondaryFn) { parts += "Fn" }
-        if flags.contains(.maskControl) { parts += "⌃" }
-        if flags.contains(.maskAlternate) { parts += "⌥" }
-        if flags.contains(.maskShift) { parts += "⇧" }
-        if flags.contains(.maskCommand) { parts += "⌘" }
+    private static func flagSymbols(_ flags: CGEventFlags) -> [String] {
+        var parts: [String] = []
+        if flags.contains(.maskSecondaryFn) { parts.append("Fn") }
+        if flags.contains(.maskControl) { parts.append("⌃") }
+        if flags.contains(.maskAlternate) { parts.append("⌥") }
+        if flags.contains(.maskShift) { parts.append("⇧") }
+        if flags.contains(.maskCommand) { parts.append("⌘") }
         return parts
     }
 

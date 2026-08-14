@@ -371,8 +371,11 @@ struct PillView: View {
     /// more than the edges.
     private func updateBars(level: CGFloat) {
         for i in bars.indices {
-            let target = level * Self.barWeights[i] * CGFloat.random(in: 0.7...1.0)
-            bars[i] = bars[i] * 0.55 + target * 0.45 // more inertia — calmer motion
+            let target = level * Self.barWeights[i] * CGFloat.random(in: 0.85...1.0)
+            let current = bars[i]
+            // Fast swell, slow decay — the Wispr-style breathing motion.
+            let blend: CGFloat = target > current ? 0.35 : 0.12
+            bars[i] = current + (target - current) * blend
         }
     }
 
@@ -385,6 +388,6 @@ struct PillView: View {
                            height: max(2, bars[i] * 15))
             }
         }
-        .animation(.linear(duration: 0.08), value: bars)
+        .animation(.easeOut(duration: 0.22), value: bars)
     }
 }

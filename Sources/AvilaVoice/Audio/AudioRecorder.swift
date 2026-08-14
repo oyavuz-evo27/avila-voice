@@ -24,6 +24,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     private var bufferCount = 0
     private var peakLevel: Float = 0
     private var stallTicks = 0
+    private var lastLevelEmit = Date.distantPast
     private let captureQueue = DispatchQueue(label: "avila.audio.capture")
 
     /// Called on an audio thread with the current input level (0…1).
@@ -213,7 +214,13 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         // Map RMS (~0…0.3 for speech) into 0…1 with a soft curve.
         let level = min(1, powf(rms * 6, 0.7))
         if level > peakLevel { peakLevel = level }
-        onLevel?(level)
+        // Capture buffers can arrive every few ms — the waveform UI only needs
+        // ~15 updates/s to look fluid rather than jittery.
+        let now = Date.now
+        if now.timeIntervalSince(lastLevelEmit) >= 0.06 {
+            lastLevelEmit = now
+            onLevel?(level)
+        }
     }
 
     private func append(_ buffer: AVAudioPCMBuffer) {
