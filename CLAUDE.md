@@ -124,3 +124,21 @@ unter „Lokal" ergänzen).
   (Cutoff relativ zum neuesten Eintrag statt Systemuhr, Prune bei jedem record(),
   Backup-Key für undecodierbare Blobs). Stand: gepusht, App läuft, Onurs
   End-to-End-Test (Hotkey-Freigaben) steht noch aus.
+- **2026-08-14 — Debugging-Session mit Onur, Ende: ERSTES ERFOLGREICHES DIKTAT.**
+  Behobene Feldprobleme in Reihenfolge: (1) SIGTRAP-Crash bei Screenshot-OCR
+  (Vision-Callback auf Background-Queue war MainActor-gebunden → nonisolated ohne
+  Completion-Closure). (2) Fehlalarm „Audiogerät geändert" bei jedem Start
+  (AVAudioEngineConfigurationChange feuert auch beim Engine-Start). (3) Kombi-Hotkeys:
+  erst gar nicht aufnehmbar, dann reihenfolgeabhängig → HotkeyBinding.modifierKey um
+  extraFlags erweitert (handgeschriebenes Codable), Matching reihenfolgeunabhängig.
+  (4) Kernproblem „Sprache nicht erkannt"/tote Waveform: AVAudioEngine lieferte auf
+  macOS 26 trotz erfolgreicher AUHAL-Geräteumleitung (Status 0!) und erteilter
+  Mikro-Berechtigung NULL Puffer → **AudioRecorder komplett auf AVCaptureSession
+  umgeschrieben** (native Geräteauswahl per UID, 16-kHz-Format direkt, Konverter nur
+  Fallback). AirPods bleiben dadurch unangetastet (kein HFP-Umschalten mehr).
+  Dazu: DebugLog nach ~/Library/Logs/AvilaVoice.log, Stall-Watchdog mit
+  Session-Rebuild, explizite Mikrofonanfrage beim Start, Leeraufnahme-Guard (0,3 s),
+  Watchdog 30 s. Wichtige Debug-Lehren: `log` ist in zsh ein Builtin
+  (→ /usr/bin/log), Onurs Setup: AIRHUG 21 (USB-Konferenzmikro) als Wunschgerät,
+  „Microsoft Teams Audio"-Loopback existiert als Falle für Default-Input.
+  Onurs Erstest erfolgreich; ausführlicher Test steht aus.
