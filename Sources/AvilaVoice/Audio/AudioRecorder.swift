@@ -20,6 +20,12 @@ final class AudioRecorder: @unchecked Sendable {
     private var lastBufferAt: Date?
     private var stallTimer: Timer?
     private var didAttemptRecovery = false
+    private var bufferCount = 0
+    private var peakLevel: Float = 0
+    private var stallTicks = 0
+    /// Set when we had to fall back to switching the SYSTEM default input;
+    /// restored on teardown.
+    private var previousDefaultInput: AudioDeviceID?
 
     /// Called on an audio thread with the current input level (0…1).
     var onLevel: (@Sendable (Float) -> Void)?
@@ -60,6 +66,7 @@ final class AudioRecorder: @unchecked Sendable {
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             guard let self else { return }
             self.lastBufferAt = .now
+            self.bufferCount += 1
             self.publishLevel(of: buffer)
             self.append(buffer)
         }
@@ -85,9 +92,10 @@ final class AudioRecorder: @unchecked Sendable {
         startedAt = .now
         lastBufferAt = nil
         didAttemptRecovery = false
-        NSLog("AvilaVoice: recording started — input %.0f Hz, %d ch, device UID '%@'",
-              inputFormat.sampleRate, inputFormat.channelCount,
-              UserDefaults.standard.string(forKey: "audio.inputDeviceUID") ?? "default")
+        bufferCount = 0
+        peakLevel = 0
+        stallTicks = 0
+        DebugLog.log("recording started — input \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch")
 
         // Stall watchdog: an engine can keep claiming isRunning while the input
         // silently stops delivering (typical during Bluetooth profile switches).
@@ -101,11 +109,13 @@ final class AudioRecorder: @unchecked Sendable {
 
     private func checkStall() {
         guard file != nil, let startedAt else { return }
+        stallTicks += 1
+        if stallTicks % 4 == 0 {
+            DebugLog.log("capture status — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel)), engine running: \(engine.isRunning)")
+        }
         let reference = lastBufferAt ?? startedAt
         guard Date.now.timeIntervalSince(reference) > 1.2 else { return }
-        NSLog("AvilaVoice: audio input stalled (%@, engine running: %d)",
-              lastBufferAt == nil ? "no buffers since start" : "buffers stopped",
-              engine.isRunning ? 1 : 0)
+        DebugLog.log("audio input stalled (\(lastBufferAt == nil ? "no buffers since start" : "buffers stopped"), engine running: \(engine.isRunning))")
         if !didAttemptRecovery, rebuildCaptureChain() {
             didAttemptRecovery = true
             lastBufferAt = .now // give the rebuilt chain a fresh grace period
@@ -195,20 +205,61 @@ final class AudioRecorder: @unchecked Sendable {
             NotificationCenter.default.removeObserver(configObserver)
             self.configObserver = nil
         }
+        if let previous = previousDefaultInput {
+            AudioDeviceManager.setDefaultInputDevice(previous)
+            DebugLog.log("mic: system default input restored to '\(AudioDeviceManager.deviceName(previous) ?? String(previous))'")
+            previousDefaultInput = nil
+        }
+        if startedAt != nil {
+            DebugLog.log("recording stopped — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel))")
+        }
     }
 
-    /// Routes the input node to the microphone chosen in settings (empty = system default).
+    /// Routes the input node to the microphone chosen in settings (empty = system
+    /// default). The direct AUHAL route can fail on modern AVAudioEngine (aggregate
+    /// devices, error -10877) — in that case the SYSTEM default input is switched
+    /// temporarily and restored on teardown.
     private func applyPreferredDevice(to input: AVAudioInputNode) {
+        let defaultName = AudioDeviceManager.defaultInputDeviceID()
+            .flatMap { AudioDeviceManager.deviceName($0) } ?? "none"
         guard let uid = UserDefaults.standard.string(forKey: "audio.inputDeviceUID"),
-              !uid.isEmpty,
-              let deviceID = AudioDeviceManager.deviceID(forUID: uid),
-              let unit = input.audioUnit else { return }
+              !uid.isEmpty else {
+            DebugLog.log("mic: using system default input ('\(defaultName)')")
+            return
+        }
+        guard let deviceID = AudioDeviceManager.deviceID(forUID: uid) else {
+            DebugLog.log("mic: selected device not found (UID '\(uid)') — using system default ('\(defaultName)')")
+            return
+        }
+        let wantedName = AudioDeviceManager.deviceName(deviceID) ?? uid
+
         var device = deviceID
-        AudioUnitSetProperty(unit,
-                             kAudioOutputUnitProperty_CurrentDevice,
-                             kAudioUnitScope_Global, 0,
-                             &device,
-                             UInt32(MemoryLayout<AudioDeviceID>.size))
+        var status: OSStatus = -1
+        if let unit = input.audioUnit {
+            status = AudioUnitSetProperty(unit,
+                                          kAudioOutputUnitProperty_CurrentDevice,
+                                          kAudioUnitScope_Global, 0,
+                                          &device,
+                                          UInt32(MemoryLayout<AudioDeviceID>.size))
+        }
+        var actual: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        if let unit = input.audioUnit {
+            AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                                 kAudioUnitScope_Global, 0, &actual, &size)
+        }
+        DebugLog.log("mic: routing to '\(wantedName)' — status \(status), unit now on '\(AudioDeviceManager.deviceName(actual) ?? String(actual))'")
+
+        if status != noErr || actual != deviceID {
+            // Fallback: temporarily make the chosen device the system default.
+            previousDefaultInput = AudioDeviceManager.defaultInputDeviceID()
+            if AudioDeviceManager.setDefaultInputDevice(deviceID) {
+                DebugLog.log("mic: fallback — system default input temporarily set to '\(wantedName)'")
+            } else {
+                DebugLog.log("mic: fallback failed — recording stays on system default ('\(defaultName)')")
+                previousDefaultInput = nil
+            }
+        }
     }
 
     private func publishLevel(of buffer: AVAudioPCMBuffer) {
@@ -220,6 +271,7 @@ final class AudioRecorder: @unchecked Sendable {
         let rms = sqrtf(sum / Float(n))
         // Map RMS (~0…0.3 for speech) into 0…1 with a soft curve.
         let level = min(1, powf(rms * 6, 0.7))
+        if level > peakLevel { peakLevel = level }
         onLevel?(level)
     }
 
