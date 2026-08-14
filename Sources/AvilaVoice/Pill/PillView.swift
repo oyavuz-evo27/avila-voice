@@ -29,6 +29,12 @@ struct PillView: View {
         }
     }()
 
+    /// Dynamic-Island choreography: the capsule GROWS as the hero; the old content
+    /// vanishes instantly-ish, the new one fades in only once the shape has room.
+    private static let contentSwap: AnyTransition = .asymmetric(
+        insertion: .opacity.animation(.easeIn(duration: 0.18).delay(0.16)),
+        removal: .opacity.animation(.easeOut(duration: 0.08)))
+
     private let warmOrange = Color(red: 1.00, green: 0.45, blue: 0.25)
     private let warmPink = Color(red: 0.96, green: 0.22, blue: 0.44)
     private let warmPurple = Color(red: 0.62, green: 0.32, blue: 0.85)
@@ -92,7 +98,7 @@ struct PillView: View {
         // Phase-change animation sits ABOVE the row so the LAYOUT animates too —
         // otherwise sibling positions jump to their final spots while the pill is
         // still interpolating, which reads as lopsided growth.
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.phase)
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: state.phase)
         .onChange(of: state.audioLevel) { _, level in
             updateBars(level: CGFloat(level))
         }
@@ -278,24 +284,24 @@ struct PillView: View {
             switch state.phase {
             case .recording:
                 waveform
-                    .transition(.opacity)
+                    .transition(Self.contentSwap)
             case .processing:
                 ProgressView()
                     .controlSize(.small)
                     .tint(.white)
-                    .transition(.opacity)
+                    .transition(Self.contentSwap)
             case .result(let inserted):
                 Image(systemName: inserted ? "checkmark" : "doc.on.clipboard")
                     .font(.system(size: 11, weight: .bold))
-                    .transition(.opacity)
+                    .transition(Self.contentSwap)
             case .error:
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(warmPink)
-                    .transition(.opacity)
+                    .transition(Self.contentSwap)
             case .idle:
                 idleLine
-                    .transition(.opacity)
+                    .transition(Self.contentSwap)
             }
         }
         .frame(width: pillSize.width, height: pillSize.height)
