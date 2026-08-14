@@ -19,6 +19,36 @@ enum DebugHooks {
                 await runAnimationProbe()
             }
         }
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("avila.debug.dictate"), object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in
+                await runRealDictationProbe()
+            }
+        }
+    }
+
+    /// Same as the animation probe, but through the REAL pipeline — including the
+    /// recorder start/stop, whose main-thread cost the fake flip cannot show.
+    private static func runRealDictationProbe() async {
+        DebugLog.log("debug: real dictation probe started")
+        let outDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/AvilaVoicePill")
+        try? FileManager.default.removeItem(at: outDir)
+        try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            AppState.shared.startRecording()
+            try? await Task.sleep(for: .milliseconds(900))
+            AppState.shared.finishRecording()
+        }
+
+        for index in 0..<30 {
+            await snapshotPill(to: outDir.appendingPathComponent(String(format: "frame-%02d.png", index)))
+            try? await Task.sleep(for: .milliseconds(40))
+        }
+        DebugLog.log("debug: real dictation probe finished")
     }
 
     private static func runAnimationProbe() async {
@@ -31,13 +61,13 @@ enum DebugHooks {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
             AppState.shared.setPhase(.recording)   // same path as real dictation
-            try? await Task.sleep(for: .seconds(1.0))
-            AppState.shared.setPhase(.idle)
+            try? await Task.sleep(for: .milliseconds(700))
+            AppState.shared.setPhase(.idle)        // covers the SHRINK too
         }
 
-        for index in 0..<14 {
+        for index in 0..<26 {
             await snapshotPill(to: outDir.appendingPathComponent(String(format: "frame-%02d.png", index)))
-            try? await Task.sleep(for: .milliseconds(55))
+            try? await Task.sleep(for: .milliseconds(40))
         }
         DebugLog.log("debug: animation probe finished")
     }

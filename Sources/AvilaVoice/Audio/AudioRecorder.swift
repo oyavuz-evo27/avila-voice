@@ -144,8 +144,17 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         stallTimer?.invalidate()
         stallTimer = nil
         if let session {
-            session.stopRunning()
             self.session = nil
+            // Detach the delegate synchronously so no stray buffer can reach a
+            // future recording's file, then stop on a background queue —
+            // stopRunning blocks for hundreds of ms and would freeze the pill's
+            // shrink animation if run on the main thread.
+            for output in session.outputs {
+                (output as? AVCaptureAudioDataOutput)?.setSampleBufferDelegate(nil, queue: nil)
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                session.stopRunning()
+            }
         }
         if startedAt != nil {
             DebugLog.log("recording stopped — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel))")
