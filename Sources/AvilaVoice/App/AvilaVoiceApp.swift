@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import IOKit.hid
 import ServiceManagement
 import SwiftUI
@@ -133,7 +134,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 enum PermissionRequester {
     static func requestOnFirstLaunch() {
-        // Microphone permission is requested automatically on first recording.
+        // Microphone: request EXPLICITLY. Relying on the implicit first-recording
+        // prompt fails silently when a stale TCC entry exists — the engine then
+        // runs but never delivers a single buffer.
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DebugLog.log("mic permission prompt answered: \(granted ? "granted" : "DENIED")")
+            }
+        case .denied, .restricted:
+            DebugLog.log("mic permission DENIED — enable it in System Settings → Privacy & Security → Microphone")
+        case .authorized:
+            break
+        @unknown default:
+            break
+        }
         // Accessibility (text insertion + hotkeys) must be granted manually:
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
@@ -141,6 +156,7 @@ enum PermissionRequester {
         if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
             IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
         }
+        DebugLog.log("startup permissions — mic: \(AVCaptureDevice.authorizationStatus(for: .audio).rawValue), accessibility: \(AXIsProcessTrusted()), input monitoring: \(IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted)")
     }
 
     static func openPrivacySettings() {
