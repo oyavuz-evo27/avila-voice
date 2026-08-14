@@ -121,12 +121,16 @@ struct PillView: View {
                 TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: growFinished)) { timeline in
                     let size = currentPillSize(at: timeline.date)
                     HStack(spacing: 4) {
+                        // Equal-width slots on both sides keep the spacer — and thus
+                        // the gaps — perfectly symmetric around the centered pill,
+                        // regardless of how wide each button is.
                         accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
                             .opacity(showAccessories ? 1 : 0)
                             .scaleEffect(showAccessories ? 1 : 0.6)
                             .allowsHitTesting(showAccessories)
                             .onHover { over in hoverCopy = over; updateVisibility() }
                             .onTapGesture { leftAction() }
+                            .frame(width: 52, alignment: .trailing)
 
                         Color.clear
                             .frame(width: size.width + 18, height: 1)
@@ -144,6 +148,7 @@ struct PillView: View {
                                     modeListOpen.toggle()
                                 }
                             }
+                            .frame(width: 52, alignment: .leading)
                     }
                     // Align accessory centers to the VISIBLE pill center:
                     // 6 pt invisible margin + half the visible pill height − half
