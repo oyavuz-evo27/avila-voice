@@ -1,4 +1,5 @@
 import AppKit
+import AVFAudio
 import Combine
 import SwiftUI
 
@@ -216,6 +217,13 @@ final class AppState: ObservableObject {
         pipelineTask = Task { [sttEngine, llmEngine] in
             defer { try? FileManager.default.removeItem(at: url) }
             do {
+                // A dead capture chain produces an (almost) empty file — fail fast
+                // instead of feeding it to the STT engine.
+                let file = try AVAudioFile(forReading: url)
+                guard Double(file.length) / file.processingFormat.sampleRate >= 0.3 else {
+                    self.setError(L("error.noSpeech"))
+                    return
+                }
                 let context: DictationContext? = mode.context.any
                     ? await ContextCollector.collect(mode.context)
                     : nil
@@ -244,7 +252,7 @@ final class AppState: ObservableObject {
         }
 
         // Watchdog: a hung model download or LLM call must not freeze the app.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
             guard let self, self.pipelineGeneration == generation,
                   case .processing = self.phase else { return }
             self.pipelineTask?.cancel()
