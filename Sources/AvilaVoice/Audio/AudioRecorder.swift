@@ -64,7 +64,14 @@ final class AudioRecorder: @unchecked Sendable {
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
         ) { [weak self] _ in
-            self?.onConfigurationChange?()
+            guard let self else { return }
+            // This notification also fires for benign reasons — engine start-up and
+            // format renegotiation. Only a genuinely dead engine outside the start
+            // window means the microphone is gone.
+            guard let started = self.startedAt,
+                  Date.now.timeIntervalSince(started) >= 1.0,
+                  !self.engine.isRunning else { return }
+            self.onConfigurationChange?()
         }
 
         engine.prepare()
