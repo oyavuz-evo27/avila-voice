@@ -89,6 +89,10 @@ struct PillView: View {
         }
         .padding(.bottom, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // Phase-change animation sits ABOVE the row so the LAYOUT animates too —
+        // otherwise sibling positions jump to their final spots while the pill is
+        // still interpolating, which reads as lopsided growth.
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.phase)
         .onChange(of: state.audioLevel) { _, level in
             updateBars(level: CGFloat(level))
         }
@@ -305,7 +309,6 @@ struct PillView: View {
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hoverPill)
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.phase)
         .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
         .contentShape(Rectangle())
         .onHover { over in hoverPill = over; updateVisibility() }
