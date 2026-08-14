@@ -55,13 +55,12 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
                                             channels: 1,
                                             interleaved: false)!
 
-    /// Ask the output for our target format directly — no converter needed when
-    /// the capture stack honors it (it resamples internally).
+    /// Float32, but the device's NATIVE sample rate and channel count: forcing an
+    /// early 16 kHz downsample before the STT threw away signal the engine's own
+    /// (better) converter could have used — a measurable recognition-quality cost.
     private static func makeOutputSettings() -> [String: Any] {
         [
             AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 16_000,
-            AVNumberOfChannelsKey: 1,
             AVLinearPCMBitDepthKey: 32,
             AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsBigEndianKey: false,
@@ -87,10 +86,9 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("avila-\(UUID().uuidString).wav")
-        file = try AVAudioFile(forWriting: url,
-                               settings: Self.targetFormat.settings,
-                               commonFormat: .pcmFormatFloat32,
-                               interleaved: false)
+        // The file is created lazily from the FIRST buffer's native format —
+        // recordings keep the microphone's full quality end-to-end.
+        file = nil
         currentFileURL = url
         converter = nil
 
@@ -297,21 +295,33 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     }
 
     private func append(_ buffer: AVAudioPCMBuffer) {
+        // Lazy file creation in the buffer's native format (capture queue only).
+        if file == nil {
+            guard let url = currentFileURL else { return }
+            file = try? AVAudioFile(forWriting: url,
+                                    settings: buffer.format.settings,
+                                    commonFormat: buffer.format.commonFormat,
+                                    interleaved: buffer.format.isInterleaved)
+            if let file {
+                DebugLog.log(String(format: "capture format: %.0f Hz, %d ch",
+                                    file.processingFormat.sampleRate,
+                                    file.processingFormat.channelCount))
+            }
+        }
         guard let file else { return }
-        // Fast path: the capture output already delivers our target format.
-        if buffer.format.sampleRate == Self.targetFormat.sampleRate,
-           buffer.format.channelCount == 1,
-           buffer.format.commonFormat == .pcmFormatFloat32 {
+        // Fast path: same format — no conversion, no quality loss.
+        if buffer.format == file.processingFormat {
             try? file.write(from: buffer)
             return
         }
+        // Fallback (format changed mid-recording after a session rebuild).
         if converter == nil {
-            converter = AVAudioConverter(from: buffer.format, to: Self.targetFormat)
+            converter = AVAudioConverter(from: buffer.format, to: file.processingFormat)
         }
         guard let converter else { return }
-        let ratio = Self.targetFormat.sampleRate / buffer.format.sampleRate
+        let ratio = file.processingFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
-        guard let out = AVAudioPCMBuffer(pcmFormat: Self.targetFormat,
+        guard let out = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
                                          frameCapacity: capacity) else { return }
         var fed = false
         converter.convert(to: out, error: nil) { _, status in
