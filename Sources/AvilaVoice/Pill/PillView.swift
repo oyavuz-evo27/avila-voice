@@ -23,7 +23,12 @@ struct PillView: View {
     @State private var growFrom = CGSize(width: 42, height: 11)
     @State private var growTo = CGSize(width: 42, height: 11)
     @State private var growStart: Date?
+    /// While set, the recording ring stays attached to the SHRINKING capsule and
+    /// fades out — removing it instantly left only the near-invisible dark capsule,
+    /// which made the stop look like a hard cut on dark backgrounds.
+    @State private var ringFadeStart: Date?
     private static let growDuration: TimeInterval = 0.38
+    private static let ringFadeDuration: TimeInterval = 0.35
 
     private func currentPillSize(at date: Date) -> CGSize {
         guard let growStart else { return growTo }
@@ -37,8 +42,22 @@ struct PillView: View {
     }
 
     private var growFinished: Bool {
+        if let ringFadeStart,
+           Date().timeIntervalSince(ringFadeStart) <= Self.ringFadeDuration + 0.05 {
+            return false // keep ticking while the ring fades out
+        }
         guard let growStart else { return true }
         return Date().timeIntervalSince(growStart) > Self.growDuration + 0.05
+    }
+
+    /// 1 while recording; eases to 0 alongside the shrink after recording ends.
+    private func ringOpacity(at date: Date) -> Double {
+        if isRecording { return 1 }
+        guard let ringFadeStart else { return 0 }
+        let t = date.timeIntervalSince(ringFadeStart) / Self.ringFadeDuration
+        guard t < 1 else { return 0 }
+        let u = 1 - t
+        return u * u // easeOut fade
     }
     @State private var idleGlow: Double = 0
     @State private var idlePulseTask: Task<Void, Never>?
@@ -137,11 +156,13 @@ struct PillView: View {
         .onChange(of: state.audioLevel) { _, level in
             updateBars(level: CGFloat(level))
         }
-        .onChange(of: state.phase) { _, _ in
+        .onChange(of: state.phase) { oldPhase, newPhase in
             let now = Date()
             growFrom = currentPillSize(at: now) // retarget smoothly mid-flight
             growTo = pillSize
             growStart = now
+            if oldPhase == .recording { ringFadeStart = now }
+            if newPhase == .recording { ringFadeStart = nil }
         }
         .onAppear {
             growFrom = pillSize
@@ -326,7 +347,7 @@ struct PillView: View {
 
     private var pill: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: growFinished)) { timeline in
-            pillBody(size: currentPillSize(at: timeline.date))
+            pillBody(size: currentPillSize(at: timeline.date), date: timeline.date)
         }
         .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
         .contentShape(Rectangle())
@@ -346,7 +367,7 @@ struct PillView: View {
         }
     }
 
-    private func pillBody(size: CGSize) -> some View {
+    private func pillBody(size: CGSize, date: Date) -> some View {
         ZStack {
             switch state.phase {
             case .recording:
@@ -378,14 +399,13 @@ struct PillView: View {
         .background(.black.opacity(hoverPill ? 0.64 : 0.82), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(hoverPill ? 0.25 : 0.12)))
         .overlay {
-            if isRecording {
+            // The ring stays in the tree while fading, so it TRACKS the shrinking
+            // capsule instead of freezing at the old size — that contracting colored
+            // ring IS the visible stop animation on dark backgrounds.
+            let opacity = ringOpacity(at: date)
+            if opacity > 0 {
                 recordingGlow
-                    // Appears instantly with the growth (as in the state the user
-                    // approved); only the EXIT fades — an instantly vanishing ring
-                    // made the stop read as a snap.
-                    .transition(.asymmetric(
-                        insertion: .identity,
-                        removal: .opacity.animation(.easeOut(duration: 0.25))))
+                    .opacity(opacity)
             }
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
