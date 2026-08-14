@@ -11,6 +11,8 @@ actor SpeechAnalyzerEngine: TranscriptionEngine {
     /// Locales whose model assets are verified installed — the (potentially slow)
     /// AssetInventory check runs once per locale, not once per dictation.
     private var preparedLocales: Set<String> = []
+    /// supportedLocales is an async system query — cached after the first call.
+    private var supportedLocaleIDs: Set<String>?
 
     func warmUp() async {
         for identifier in ["de-DE", "en-US"] {
@@ -44,9 +46,11 @@ actor SpeechAnalyzerEngine: TranscriptionEngine {
                                             transcriptionOptions: [],
                                             reportingOptions: [],
                                             attributeOptions: [])
-        guard await SpeechTranscriber.supportedLocales.contains(where: {
-            $0.identifier(.bcp47) == locale.identifier(.bcp47)
-        }) else {
+        if supportedLocaleIDs == nil {
+            supportedLocaleIDs = Set(await SpeechTranscriber.supportedLocales
+                .map { $0.identifier(.bcp47) })
+        }
+        guard supportedLocaleIDs?.contains(locale.identifier(.bcp47)) == true else {
             throw TranscriptionError.engineUnavailable(L("error.sttLocale"))
         }
         if !preparedLocales.contains(locale.identifier) {

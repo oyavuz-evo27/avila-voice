@@ -30,6 +30,12 @@ protocol EnhancementEngine: Sendable {
                  mode: Mode,
                  dictionary: [String],
                  context: DictationContext?) async throws -> String
+    /// Prepare resources for the given mode so the next enhance() starts warm.
+    func prewarm(mode: Mode) async
+}
+
+extension EnhancementEngine {
+    func prewarm(mode: Mode) async {}
 }
 
 /// Builds the prompt shared by all engines.

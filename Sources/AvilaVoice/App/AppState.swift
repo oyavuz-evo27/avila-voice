@@ -21,7 +21,12 @@ final class AppState: ObservableObject {
     }
     @Published var audioLevel: Float = 0
     @Published var modes: [Mode] = Mode.builtins
-    @Published var selectedModeID: UUID = Mode.standard.id
+    @Published var selectedModeID: UUID = Mode.standard.id {
+        didSet {
+            let mode = selectedMode
+            Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+        }
+    }
     @Published var dictionaryWords: [String] = []
     @Published var pttBinding: HotkeyBinding?
     @Published var handsFreeBinding: HotkeyBinding?
@@ -94,6 +99,8 @@ final class AppState: ObservableObject {
         hotkeys.onStatusChange = { [weak self] active in self?.hotkeysActive = active }
         hotkeys.start()
         Task.detached { [sttEngine] in await sttEngine.warmUp() }
+        let mode = selectedMode
+        Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
     }
 
     // MARK: - Hotkey bindings
@@ -238,10 +245,13 @@ final class AppState: ObservableObject {
                     self.setError(L("error.noSpeech"))
                     return
                 }
-                let context: DictationContext? = mode.context.any
-                    ? await ContextCollector.collect(mode.context)
+                // Context (incl. screenshot OCR) runs IN PARALLEL with the STT —
+                // serializing the two cost up to a second per dictation.
+                async let contextFuture: DictationContext? = mode.context.any
+                    ? ContextCollector.collect(mode.context)
                     : nil
                 let raw = try await sttEngine.transcribe(fileURL: url)
+                let context = await contextFuture
                 guard !Task.isCancelled else { return }
                 // The LLM step must never lose a successful transcript: any
                 // enhancement failure (guardrails, context window) falls back to raw.
