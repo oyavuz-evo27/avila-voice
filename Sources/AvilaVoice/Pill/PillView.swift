@@ -16,11 +16,11 @@ struct PillView: View {
     @State private var orbitA: Double = 0
     @State private var orbitB: Double = 180
     @State private var idlePulse = false
-    @State private var bars: [CGFloat] = Array(repeating: 0, count: 19)
+    @State private var bars: [CGFloat] = Array(repeating: 0, count: 17)
 
     /// Center-weighted envelope: middle bars swing the most, outer ones stay calm.
     private static let barWeights: [CGFloat] = {
-        let n = 19
+        let n = 17
         let mid = CGFloat(n - 1) / 2
         return (0..<n).map { i in
             let x = (CGFloat(i) - mid) / mid
@@ -248,31 +248,42 @@ struct PillView: View {
 
     // MARK: - The pill itself
 
+    /// One container whose size the spring animates — the abrupt idle→recording jump
+    /// becomes a smooth growth, contents crossfade.
+    private var pillSize: CGSize {
+        switch state.phase {
+        case .recording: CGSize(width: 84, height: 20)
+        case .processing, .result, .error: CGSize(width: 52, height: 17)
+        case .idle: CGSize(width: 42, height: 11)
+        }
+    }
+
     private var pill: some View {
-        Group {
+        ZStack {
             switch state.phase {
             case .recording:
                 waveform
-                    .frame(width: 92, height: 20)
+                    .transition(.opacity)
             case .processing:
                 ProgressView()
                     .controlSize(.small)
                     .tint(.white)
-                    .frame(width: 52, height: 17)
+                    .transition(.opacity)
             case .result(let inserted):
                 Image(systemName: inserted ? "checkmark" : "doc.on.clipboard")
                     .font(.system(size: 11, weight: .bold))
-                    .frame(width: 52, height: 17)
+                    .transition(.opacity)
             case .error:
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(warmPink)
-                    .frame(width: 52, height: 17)
+                    .transition(.opacity)
             case .idle:
                 idleLine
-                    .frame(width: 42, height: 11)
+                    .transition(.opacity)
             }
         }
+        .frame(width: pillSize.width, height: pillSize.height)
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -283,7 +294,7 @@ struct PillView: View {
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hoverPill)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: state.phase)
+        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: state.phase)
         .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
         .contentShape(Rectangle())
         .onHover { over in hoverPill = over; updateVisibility() }
