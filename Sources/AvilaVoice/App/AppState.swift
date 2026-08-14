@@ -359,6 +359,12 @@ enum Sounds {
     static var enabled: Bool {
         UserDefaults.standard.object(forKey: "sounds.enabled") as? Bool ?? true
     }
-    static func playStart() { if enabled { NSSound(named: "Tink")?.play() } }
-    static func playStop() { if enabled { NSSound(named: "Pop")?.play() } }
+    static func playStart() { play("Tink") }
+    static func playStop() { play("Pop") }
+
+    private static func play(_ name: String) {
+        guard enabled, let sound = NSSound(named: name) else { return }
+        sound.volume = 0.25 // subtle — a confirmation, not an alert
+        sound.play()
+    }
 }
