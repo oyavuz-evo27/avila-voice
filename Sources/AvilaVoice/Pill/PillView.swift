@@ -32,8 +32,8 @@ struct PillView: View {
     /// Dynamic-Island choreography: the capsule GROWS as the hero; the old content
     /// vanishes instantly-ish, the new one fades in only once the shape has room.
     private static let contentSwap: AnyTransition = .asymmetric(
-        insertion: .opacity.animation(.easeIn(duration: 0.18).delay(0.16)),
-        removal: .opacity.animation(.easeOut(duration: 0.08)))
+        insertion: .opacity.animation(.easeIn(duration: 0.16).delay(0.12)),
+        removal: .opacity.animation(.easeOut(duration: 0.05)))
 
     private let warmOrange = Color(red: 1.00, green: 0.45, blue: 0.25)
     private let warmPink = Color(red: 0.96, green: 0.22, blue: 0.44)
@@ -98,7 +98,9 @@ struct PillView: View {
         // Phase-change animation sits ABOVE the row so the LAYOUT animates too —
         // otherwise sibling positions jump to their final spots while the pill is
         // still interpolating, which reads as lopsided growth.
-        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: state.phase)
+        // dampingFraction 0.9: decisive growth with a whisper of bounce — no
+        // visible overshoot-and-snap-back.
+        .animation(.spring(response: 0.42, dampingFraction: 0.9), value: state.phase)
         .onChange(of: state.audioLevel) { _, level in
             updateBars(level: CGFloat(level))
         }
