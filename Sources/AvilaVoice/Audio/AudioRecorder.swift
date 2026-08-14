@@ -21,6 +21,12 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     /// dictations drops every buffer unprocessed.
     private var isWriting = false
     private var idleTimer: Timer?
+    /// Rolling buffer of the most recent audio while the session is warm but idle.
+    /// Prepended to the next dictation so word ONSETS survive even when the user
+    /// starts speaking at (or slightly before) the hotkey press. captureQueue only.
+    private var preRoll: [AVAudioPCMBuffer] = []
+    private var preRollSeconds: Double = 0
+    static let preRollWindow: Double = 0.6
     /// How long the capture session stays warm after a dictation. Trade-off: the
     /// macOS microphone indicator stays on during this window, but the next
     /// dictation starts instantly and loses no word onsets to startRunning.
@@ -104,6 +110,17 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         }
 
         isWriting = true
+        // Flush the pre-roll into the fresh file on the capture queue — it runs
+        // BEFORE any newly arriving buffer (same serial queue).
+        captureQueue.async { [weak self] in
+            guard let self else { return }
+            if !self.preRoll.isEmpty {
+                DebugLog.log(String(format: "pre-roll: prepending %.2f s", self.preRollSeconds))
+                for buffered in self.preRoll { self.append(buffered) }
+            }
+            self.preRoll = []
+            self.preRollSeconds = 0
+        }
         startedAt = .now
         lastBufferAt = nil
         didAttemptRecovery = false
@@ -227,8 +244,17 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
-        guard isWriting else { return } // warm idle window: drop everything
         guard let buffer = Self.pcmBuffer(from: sampleBuffer) else { return }
+        guard isWriting else {
+            // Warm idle window: keep a short rolling pre-roll, drop the rest.
+            preRoll.append(buffer)
+            preRollSeconds += Double(buffer.frameLength) / buffer.format.sampleRate
+            while preRollSeconds > Self.preRollWindow, let first = preRoll.first {
+                preRollSeconds -= Double(first.frameLength) / first.format.sampleRate
+                preRoll.removeFirst()
+            }
+            return
+        }
         lastBufferAt = .now
         bufferCount += 1
         publishLevel(of: buffer)

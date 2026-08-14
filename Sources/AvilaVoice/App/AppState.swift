@@ -53,7 +53,7 @@ final class AppState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     var selectedMode: Mode {
-        modes.first { $0.id == selectedModeID } ?? .standard
+        modes.first { $0.id == selectedModeID } ?? modes.first ?? .standard
     }
 
     /// The pill's growth animation MUST be driven at the source: value-based
@@ -249,7 +249,14 @@ final class AppState: ObservableObject {
         pendingContext = nil
 
         pipelineTask = Task { [sttEngine, llmEngine] in
-            defer { try? FileManager.default.removeItem(at: url) }
+            defer {
+                // Keep the LAST recording for recognition-quality diagnosis.
+                let keep = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Library/Logs/AvilaVoice-last.wav")
+                try? FileManager.default.removeItem(at: keep)
+                try? FileManager.default.moveItem(at: url, to: keep)
+                try? FileManager.default.removeItem(at: url)
+            }
             let pipelineStarted = Date()
             do {
                 // A dead capture chain produces an (almost) empty file — fail fast
@@ -273,6 +280,7 @@ final class AppState: ObservableObject {
                 }
                 DebugLog.log(String(format: "timing: stt+context %.0f ms (%d Zeichen)",
                                     Date().timeIntervalSince(sttStarted) * 1000, raw.count))
+                DebugLog.log("stt raw: \(raw)")
                 guard !Task.isCancelled else { return }
                 // The LLM step must never lose a successful transcript: any
                 // enhancement failure (guardrails, context window) falls back to raw.
@@ -368,12 +376,16 @@ final class AppState: ObservableObject {
     // MARK: - Modes & dictionary persistence
 
     func loadModes() {
+        let deletedBuiltins = Set(UserDefaults.standard
+            .stringArray(forKey: "modes.deletedBuiltins") ?? [])
         if let data = UserDefaults.standard.data(forKey: "modes.all"),
            let stored = try? JSONDecoder().decode([Mode].self, from: data) {
             var result = stored
             var insertIndex = 0
             for builtin in Mode.builtins {
-                if !result.contains(where: { $0.id == builtin.id }) {
+                // Missing builtins reappear only if the user did not delete them.
+                if !result.contains(where: { $0.id == builtin.id }),
+                   !deletedBuiltins.contains(builtin.id.uuidString) {
                     result.insert(builtin, at: min(insertIndex, result.count))
                 }
                 insertIndex += 1
@@ -384,6 +396,7 @@ final class AppState: ObservableObject {
             modes = Mode.builtins + custom // migrate from the old storage key
             saveModes()
         }
+        if modes.isEmpty { modes = [.standard] }
     }
 
     func saveModes() {
@@ -400,9 +413,16 @@ final class AppState: ObservableObject {
     }
 
     func deleteMode(id: UUID) {
-        guard let mode = modes.first(where: { $0.id == id }), !mode.isBuiltin else { return }
+        guard modes.count > 1, let mode = modes.first(where: { $0.id == id }) else { return }
+        if mode.isBuiltin {
+            var deleted = UserDefaults.standard.stringArray(forKey: "modes.deletedBuiltins") ?? []
+            if !deleted.contains(id.uuidString) { deleted.append(id.uuidString) }
+            UserDefaults.standard.set(deleted, forKey: "modes.deletedBuiltins")
+        }
         modes.removeAll { $0.id == id }
-        if selectedModeID == id { selectedModeID = Mode.standard.id }
+        if selectedModeID == id, let first = modes.first {
+            selectedModeID = first.id
+        }
         saveModes()
     }
 

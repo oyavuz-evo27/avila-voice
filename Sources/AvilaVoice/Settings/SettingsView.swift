@@ -164,7 +164,7 @@ struct ModesSettings: View {
                     } label: {
                         Image(systemName: "minus")
                     }
-                    .disabled(selectedMode?.isBuiltin != false)
+                    .disabled(selection == nil || state.modes.count <= 1)
                     Spacer()
                 }
                 .buttonStyle(.borderless)
