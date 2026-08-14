@@ -15,6 +15,31 @@ struct PillView: View {
     @State private var copiedFlash = false
     @State private var orbitA: Double = 0
     @State private var ringPulse = false
+
+    // Manual growth animation: implicit SwiftUI animations do not render for
+    // phase-driven layout in this panel (verified frame-by-frame with the
+    // screenshot probe). The size is therefore ticked explicitly per display
+    // frame — the same mechanism as the waveform, which demonstrably animates.
+    @State private var growFrom = CGSize(width: 42, height: 11)
+    @State private var growTo = CGSize(width: 42, height: 11)
+    @State private var growStart: Date?
+    private static let growDuration: TimeInterval = 0.38
+
+    private func currentPillSize(at date: Date) -> CGSize {
+        guard let growStart else { return growTo }
+        let t = min(1, max(0, date.timeIntervalSince(growStart) / Self.growDuration))
+        // easeOutBack — decisive growth with a slight Dynamic-Island overshoot.
+        let s = 1.15
+        let u = t - 1
+        let eased = 1 + (s + 1) * u * u * u + s * u * u
+        return CGSize(width: growFrom.width + (growTo.width - growFrom.width) * eased,
+                      height: growFrom.height + (growTo.height - growFrom.height) * eased)
+    }
+
+    private var growFinished: Bool {
+        guard let growStart else { return true }
+        return Date().timeIntervalSince(growStart) > Self.growDuration + 0.05
+    }
     @State private var idleGlow: Double = 0
     @State private var idlePulseTask: Task<Void, Never>?
     @State private var bars: [CGFloat] = Array(repeating: 0, count: 17)
@@ -73,9 +98,11 @@ struct PillView: View {
                         .onHover { over in hoverCopy = over; updateVisibility() }
                         .onTapGesture { leftAction() }
 
-                    Color.clear
-                        .frame(width: pillSize.width + 18, height: 1)
-                        .allowsHitTesting(false)
+                    TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: growFinished)) { timeline in
+                        Color.clear
+                            .frame(width: currentPillSize(at: timeline.date).width + 18, height: 1)
+                    }
+                    .allowsHitTesting(false)
 
                     accessory(text: L("Modes"), hovering: hoverModes)
                         .help(L("Modes"))
@@ -101,12 +128,18 @@ struct PillView: View {
         // Phase-change animation sits ABOVE the row so the LAYOUT animates too —
         // otherwise sibling positions jump to their final spots while the pill is
         // still interpolating, which reads as lopsided growth.
-        // The canonical Dynamic-Island spring (stiffness 400, damping 30, mass 1 —
-        // the values used across DI replicas): snappy with a small, lively bounce.
-        .animation(.interpolatingSpring(mass: 1, stiffness: 400, damping: 30),
-                   value: state.phase)
         .onChange(of: state.audioLevel) { _, level in
             updateBars(level: CGFloat(level))
+        }
+        .onChange(of: state.phase) { _, _ in
+            let now = Date()
+            growFrom = currentPillSize(at: now) // retarget smoothly mid-flight
+            growTo = pillSize
+            growStart = now
+        }
+        .onAppear {
+            growFrom = pillSize
+            growTo = pillSize
         }
     }
 
@@ -286,6 +319,28 @@ struct PillView: View {
     }
 
     private var pill: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: growFinished)) { timeline in
+            pillBody(size: currentPillSize(at: timeline.date))
+        }
+        .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
+        .contentShape(Rectangle())
+        .onHover { over in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                hoverPill = over
+            }
+            updateVisibility()
+        }
+        .onTapGesture {
+            // Click on the pill = toggle recording (same as a hotkey tap).
+            switch state.phase {
+            case .recording: state.finishRecording()
+            case .processing: break
+            default: state.startRecording()
+            }
+        }
+    }
+
+    private func pillBody(size: CGSize) -> some View {
         ZStack {
             switch state.phase {
             case .recording:
@@ -310,7 +365,7 @@ struct PillView: View {
                     .transition(Self.contentSwap)
             }
         }
-        .frame(width: pillSize.width, height: pillSize.height)
+        .frame(width: size.width, height: size.height)
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -320,26 +375,6 @@ struct PillView: View {
             if isRecording { recordingGlow }
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
-        // NOTE: no `.animation(value: hoverPill)` here! A value-based animation
-        // modifier strips inherited animations from its subtree whenever its own
-        // value did not change — it silently killed the phase-growth animation.
-        // Hover changes are animated at the source (withAnimation in onHover).
-        .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
-        .contentShape(Rectangle())
-        .onHover { over in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                hoverPill = over
-            }
-            updateVisibility()
-        }
-        .onTapGesture {
-            // Click on the pill = toggle recording (same as a hotkey tap).
-            switch state.phase {
-            case .recording: state.finishRecording()
-            case .processing: break
-            default: state.startRecording()
-            }
-        }
     }
 
     /// The idle line: gray at rest. Every few seconds the WHOLE bar lights up once
