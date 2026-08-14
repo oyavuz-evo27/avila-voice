@@ -53,13 +53,19 @@ struct PillView: View {
                 }
             }
 
-            HStack(spacing: 4) {
+            // Equal-width side slots keep the pill EXACTLY centered, and bottom
+            // alignment anchors its lower edge — so it grows notch-like: evenly to
+            // the left and right, and upward only.
+            HStack(alignment: .bottom, spacing: 2) {
                 accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
                     .opacity(showAccessories ? 1 : 0)
                     .scaleEffect(showAccessories ? 1 : 0.6)
                     .allowsHitTesting(showAccessories)
                     .onHover { over in hoverCopy = over; updateVisibility() }
                     .onTapGesture { leftAction() }
+                    .padding(.bottom, 6)
+                    .offset(x: 4) // nudge toward the pill (its 6 pt hit margin separates them)
+                    .frame(width: 52, alignment: .trailing)
 
                 pill
 
@@ -75,6 +81,9 @@ struct PillView: View {
                             modeListOpen.toggle()
                         }
                     }
+                    .padding(.bottom, 6)
+                    .offset(x: -4) // nudge toward the pill
+                    .frame(width: 52, alignment: .leading)
             }
             .animation(.spring(response: 0.25, dampingFraction: 0.85), value: showAccessories)
         }
