@@ -64,14 +64,7 @@ final class AudioRecorder: @unchecked Sendable {
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
         ) { [weak self] _ in
-            guard let self else { return }
-            // This notification also fires for benign reasons — engine start-up and
-            // format renegotiation. Only a genuinely dead engine outside the start
-            // window means the microphone is gone.
-            guard let started = self.startedAt,
-                  Date.now.timeIntervalSince(started) >= 1.0,
-                  !self.engine.isRunning else { return }
-            self.onConfigurationChange?()
+            self?.handleConfigurationChange()
         }
 
         engine.prepare()
@@ -105,6 +98,48 @@ final class AudioRecorder: @unchecked Sendable {
     func cancel() {
         if let (url, _) = stop() {
             try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// Configuration changes fire for benign reasons (engine start-up, format
+    /// renegotiation) and for real ones (AirPods dropping to HFP telephony mode,
+    /// microphone unplugged). Strategy: if the engine stopped mid-recording, rebuild
+    /// the capture chain once and keep appending to the same file — only when that
+    /// fails is the recording declared lost.
+    private func handleConfigurationChange() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.file != nil else { return }  // not recording
+            if self.engine.isRunning { return }               // benign renegotiation
+            if self.rebuildCaptureChain() {
+                NSLog("AvilaVoice: audio configuration changed — capture chain rebuilt, recording continues")
+                return
+            }
+            self.onConfigurationChange?()
+        }
+    }
+
+    private func rebuildCaptureChain() -> Bool {
+        let input = engine.inputNode
+        if tapInstalled {
+            input.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        applyPreferredDevice(to: input)
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else { return false }
+        converter = AVAudioConverter(from: format, to: Self.targetFormat)
+        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            self.publishLevel(of: buffer)
+            self.append(buffer)
+        }
+        tapInstalled = true
+        engine.prepare()
+        do {
+            try engine.start()
+            return true
+        } catch {
+            return false
         }
     }
 

@@ -24,6 +24,7 @@
 "Statistics" = "Statistics";
 "Microphone" = "Microphone";
 "System default" = "System default";
+"mic.hint" = "Note: recording from Bluetooth headphones (e.g. AirPods) switches them to telephony mode — their playback quality drops while dictating. Prefer a wired or display microphone.";
 "Dictation language" = "Dictation language";
 "German" = "German";
 "English" = "English";

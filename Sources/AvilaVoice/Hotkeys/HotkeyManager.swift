@@ -320,15 +320,21 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
                       wasDown: Bool) -> Edge? {
         switch binding {
         case .modifierKey(let code, let extra):
-            guard type == .flagsChanged,
-                  event.getIntegerValueField(.keyboardEventKeycode) == code else { return nil }
-            if HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags) {
-                // The press only counts when the additional modifiers (e.g. Fn) are
-                // held too — otherwise the bare key passes through to other apps.
-                return event.flags.rawValue & extra == extra ? .down : nil
+            guard type == .flagsChanged else { return nil }
+            // React to changes of ANY component of the combo, so the press order
+            // does not matter (Fn then ⌘ and ⌘ then Fn both work).
+            let evCode = event.getIntegerValueField(.keyboardEventKeycode)
+            let involvesBinding = evCode == code
+                || (HotkeyBinding.modifierMask(for: evCode)
+                        .map { $0.rawValue & extra != 0 } ?? false)
+            guard involvesBinding else { return nil }
+            let satisfied = HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags)
+                && event.flags.rawValue & extra == extra
+            if satisfied {
+                return wasDown ? .swallow : .down
             }
-            // The release matches regardless of the extra modifiers (they may have
-            // been released first), but only if the press was ours.
+            // Not (or no longer) fully pressed: an incomplete combo passes through
+            // to other apps; a release after our press ends the trigger.
             return wasDown ? .up : nil
 
         case .key(let code, let mods):

@@ -36,6 +36,9 @@ struct GeneralSettings: View {
                         Text(device.name).tag(device.uid)
                     }
                 }
+                Text(L("mic.hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker(L("Dictation language"), selection: $sttLocale) {
                     Text(L("German")).tag("de-DE")
                     Text(L("English")).tag("en-US")

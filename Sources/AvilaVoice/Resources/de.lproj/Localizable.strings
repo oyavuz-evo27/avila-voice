@@ -24,6 +24,7 @@
 "Statistics" = "Statistik";
 "Microphone" = "Mikrofon";
 "System default" = "Systemstandard";
+"mic.hint" = "Hinweis: Aufnahmen über Bluetooth-Kopfhörer (z. B. AirPods) schalten diese in den Telefonie-Modus — ihre Wiedergabequalität sinkt während des Diktats. Besser ein Kabel- oder Display-Mikrofon wählen.";
 "Dictation language" = "Diktatsprache";
 "German" = "Deutsch";
 "English" = "Englisch";
