@@ -17,6 +17,9 @@ final class AudioRecorder: @unchecked Sendable {
     private var startedAt: Date?
     private var tapInstalled = false
     private var configObserver: NSObjectProtocol?
+    private var lastBufferAt: Date?
+    private var stallTimer: Timer?
+    private var didAttemptRecovery = false
 
     /// Called on an audio thread with the current input level (0…1).
     var onLevel: (@Sendable (Float) -> Void)?
@@ -56,6 +59,7 @@ final class AudioRecorder: @unchecked Sendable {
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             guard let self else { return }
+            self.lastBufferAt = .now
             self.publishLevel(of: buffer)
             self.append(buffer)
         }
@@ -79,6 +83,35 @@ final class AudioRecorder: @unchecked Sendable {
             throw error
         }
         startedAt = .now
+        lastBufferAt = nil
+        didAttemptRecovery = false
+        NSLog("AvilaVoice: recording started — input %.0f Hz, %d ch, device UID '%@'",
+              inputFormat.sampleRate, inputFormat.channelCount,
+              UserDefaults.standard.string(forKey: "audio.inputDeviceUID") ?? "default")
+
+        // Stall watchdog: an engine can keep claiming isRunning while the input
+        // silently stops delivering (typical during Bluetooth profile switches).
+        stallTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.7, repeats: true) { [weak self] _ in
+            self?.checkStall()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        stallTimer = timer
+    }
+
+    private func checkStall() {
+        guard file != nil, let startedAt else { return }
+        let reference = lastBufferAt ?? startedAt
+        guard Date.now.timeIntervalSince(reference) > 1.2 else { return }
+        NSLog("AvilaVoice: audio input stalled (%@, engine running: %d)",
+              lastBufferAt == nil ? "no buffers since start" : "buffers stopped",
+              engine.isRunning ? 1 : 0)
+        if !didAttemptRecovery, rebuildCaptureChain() {
+            didAttemptRecovery = true
+            lastBufferAt = .now // give the rebuilt chain a fresh grace period
+            return
+        }
+        onConfigurationChange?()
     }
 
     /// Stops the recording and returns (file, duration in seconds).
@@ -109,9 +142,11 @@ final class AudioRecorder: @unchecked Sendable {
     private func handleConfigurationChange() {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.file != nil else { return }  // not recording
+            NSLog("AvilaVoice: audio configuration changed (engine running: %d)",
+                  self.engine.isRunning ? 1 : 0)
             if self.engine.isRunning { return }               // benign renegotiation
             if self.rebuildCaptureChain() {
-                NSLog("AvilaVoice: audio configuration changed — capture chain rebuilt, recording continues")
+                NSLog("AvilaVoice: capture chain rebuilt, recording continues")
                 return
             }
             self.onConfigurationChange?()
@@ -137,13 +172,18 @@ final class AudioRecorder: @unchecked Sendable {
         engine.prepare()
         do {
             try engine.start()
+            NSLog("AvilaVoice: rebuilt chain — input now %.0f Hz, %d ch",
+                  format.sampleRate, format.channelCount)
             return true
         } catch {
+            NSLog("AvilaVoice: capture chain rebuild failed — %@", error.localizedDescription)
             return false
         }
     }
 
     private func teardown() {
+        stallTimer?.invalidate()
+        stallTimer = nil
         if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)
             tapInstalled = false
