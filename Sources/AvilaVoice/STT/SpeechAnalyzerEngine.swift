@@ -18,6 +18,29 @@ actor SpeechAnalyzerEngine: TranscriptionEngine {
         for identifier in ["de-DE", "en-US"] {
             _ = try? await makeTranscriber(locale: Locale(identifier: identifier))
         }
+        // The asset check alone leaves the model cold (~150–300 ms penalty on the
+        // first dictation) — a short silent run actually loads it.
+        await warmModelWithSilence()
+    }
+
+    private func warmModelWithSilence() async {
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000,
+                                   channels: 1, interleaved: false)!
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("avila-warmup.wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard let file = try? AVAudioFile(forWriting: url, settings: format.settings,
+                                          commonFormat: .pcmFormatFloat32,
+                                          interleaved: false),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8_000) else {
+            return
+        }
+        buffer.frameLength = 8_000 // 0.5 s of silence
+        try? file.write(from: buffer)
+        let started = Date()
+        _ = try? await transcribe(fileURL: url) // throws emptyResult — model is warm now
+        DebugLog.log(String(format: "stt model warm-up took %.0f ms",
+                            Date().timeIntervalSince(started) * 1000))
     }
 
     func transcribe(fileURL: URL) async throws -> String {

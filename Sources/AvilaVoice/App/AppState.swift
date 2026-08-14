@@ -47,6 +47,9 @@ final class AppState: ObservableObject {
     /// earlier, still-running pipeline.
     private var pipelineGeneration = 0
     private var pipelineTask: Task<Void, Never>?
+    /// Context capture starts WITH the recording (screenshot OCR costs up to ~0.8 s —
+    /// running it at stop time put it on the critical path).
+    private var pendingContext: (modeID: UUID, task: Task<DictationContext?, Never>)?
     private var cancellables = Set<AnyCancellable>()
 
     var selectedMode: Mode {
@@ -217,6 +220,13 @@ final class AppState: ObservableObject {
             try recorder.start()
             setPhase(.recording)
             Sounds.playStart()
+            let mode = selectedMode
+            if mode.context.any {
+                let options = mode.context
+                pendingContext = (mode.id, Task { await ContextCollector.collect(options) })
+            } else {
+                pendingContext = nil
+            }
         } catch {
             setError(LF("error.microphone", error.localizedDescription))
         }
@@ -235,8 +245,12 @@ final class AppState: ObservableObject {
         pipelineGeneration += 1
         let generation = pipelineGeneration
 
+        let startedContext = pendingContext
+        pendingContext = nil
+
         pipelineTask = Task { [sttEngine, llmEngine] in
             defer { try? FileManager.default.removeItem(at: url) }
+            let pipelineStarted = Date()
             do {
                 // A dead capture chain produces an (almost) empty file — fail fast
                 // instead of feeding it to the STT engine.
@@ -245,21 +259,28 @@ final class AppState: ObservableObject {
                     self.setError(L("error.noSpeech"))
                     return
                 }
-                // Context (incl. screenshot OCR) runs IN PARALLEL with the STT —
-                // serializing the two cost up to a second per dictation.
                 let sttStarted = Date()
-                async let contextFuture: DictationContext? = mode.context.any
-                    ? ContextCollector.collect(mode.context)
-                    : nil
                 let raw = try await sttEngine.transcribe(fileURL: url)
-                let context = await contextFuture
+                // Context was captured at recording START (what the user was looking
+                // at); only a mid-recording mode switch requires a fresh collect.
+                let context: DictationContext?
+                if let startedContext, startedContext.modeID == mode.id {
+                    context = await startedContext.task.value
+                } else if mode.context.any {
+                    context = await ContextCollector.collect(mode.context)
+                } else {
+                    context = nil
+                }
                 DebugLog.log(String(format: "timing: stt+context %.0f ms (%d Zeichen)",
                                     Date().timeIntervalSince(sttStarted) * 1000, raw.count))
                 guard !Task.isCancelled else { return }
                 // The LLM step must never lose a successful transcript: any
                 // enhancement failure (guardrails, context window) falls back to raw.
                 var final = raw
-                if await llmEngine.isAvailable() {
+                let words = raw.split { $0.isWhitespace || $0.isNewline }.count
+                // Very short dictations skip the LLM: ~350 ms saved, and the system
+                // model tends to mistranslate 2–3-word inputs.
+                if words >= 4, await llmEngine.isAvailable() {
                     let llmStarted = Date()
                     do {
                         final = try await llmEngine.enhance(transcript: raw, mode: mode,
@@ -270,11 +291,16 @@ final class AppState: ObservableObject {
                     }
                     DebugLog.log(String(format: "timing: llm %.0f ms",
                                         Date().timeIntervalSince(llmStarted) * 1000))
+                } else if words < 4 {
+                    DebugLog.log("timing: llm skipped (short dictation, \(words) words)")
                 }
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 self.deliver(raw: raw, final: final, mode: mode, duration: duration)
             } catch {
+                DebugLog.log(String(format: "timing: pipeline failed after %.0f ms — %@",
+                                    Date().timeIntervalSince(pipelineStarted) * 1000,
+                                    error.localizedDescription))
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 self.setError(error.localizedDescription)
