@@ -58,7 +58,7 @@ struct PillView: View {
     /// vanishes instantly-ish, the new one fades in only once the shape has room.
     private static let contentSwap: AnyTransition = .asymmetric(
         insertion: .opacity.animation(.easeIn(duration: 0.16).delay(0.12)),
-        removal: .opacity.animation(.easeOut(duration: 0.05)))
+        removal: .opacity.animation(.easeOut(duration: 0.18)))
 
     private let warmOrange = Color(red: 1.00, green: 0.45, blue: 0.25)
     private let warmPink = Color(red: 0.96, green: 0.22, blue: 0.44)
@@ -372,7 +372,12 @@ struct PillView: View {
         .background(.black.opacity(hoverPill ? 0.64 : 0.82), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(hoverPill ? 0.25 : 0.12)))
         .overlay {
-            if isRecording { recordingGlow }
+            if isRecording {
+                recordingGlow
+                    // Fade out WHILE the capsule shrinks — an instantly vanishing
+                    // ring made the whole stop read as a snap.
+                    .transition(.opacity.animation(.easeOut(duration: 0.25)))
+            }
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
     }
