@@ -91,7 +91,9 @@ struct PillView: View {
                         }
                 }
                 .padding(.bottom, 8)
-                .animation(.spring(response: 0.25, dampingFraction: 0.85), value: showAccessories)
+                // showAccessories changes are animated at the source (updateVisibility)
+                // — an .animation(value:) modifier here would strip the phase-growth
+                // animation from the accessories.
             }
         }
         .padding(.bottom, 2)
@@ -99,9 +101,10 @@ struct PillView: View {
         // Phase-change animation sits ABOVE the row so the LAYOUT animates too —
         // otherwise sibling positions jump to their final spots while the pill is
         // still interpolating, which reads as lopsided growth.
-        // dampingFraction 0.9: decisive growth with a whisper of bounce — no
-        // visible overshoot-and-snap-back.
-        .animation(.spring(response: 0.42, dampingFraction: 0.9), value: state.phase)
+        // The canonical Dynamic-Island spring (stiffness 400, damping 30, mass 1 —
+        // the values used across DI replicas): snappy with a small, lively bounce.
+        .animation(.interpolatingSpring(mass: 1, stiffness: 400, damping: 30),
+                   value: state.phase)
         .onChange(of: state.audioLevel) { _, level in
             updateBars(level: CGFloat(level))
         }
@@ -317,10 +320,18 @@ struct PillView: View {
             if isRecording { recordingGlow }
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: hoverPill)
+        // NOTE: no `.animation(value: hoverPill)` here! A value-based animation
+        // modifier strips inherited animations from its subtree whenever its own
+        // value did not change — it silently killed the phase-growth animation.
+        // Hover changes are animated at the source (withAnimation in onHover).
         .padding(6) // invisible margin: enlarges the click/hover target (Fitts)
         .contentShape(Rectangle())
-        .onHover { over in hoverPill = over; updateVisibility() }
+        .onHover { over in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                hoverPill = over
+            }
+            updateVisibility()
+        }
         .onTapGesture {
             // Click on the pill = toggle recording (same as a hotkey tap).
             switch state.phase {
