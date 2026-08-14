@@ -142,3 +142,18 @@ unter „Lokal" ergänzen).
   (→ /usr/bin/log), Onurs Setup: AIRHUG 21 (USB-Konferenzmikro) als Wunschgerät,
   „Microsoft Teams Audio"-Loopback existiert als Falle für Default-Input.
   Onurs Erstest erfolgreich; ausführlicher Test steht aus.
+- **2026-08-14 (Nachmittag) — Dynamic-Island-Animation gelöst (Onur: „einfach perfekt").**
+  Harte Lektionen: (1) In diesem NSPanel/NSHostingView-Setup rendert WEDER
+  `.animation(value:)` NOCH `withAnimation` die phasengetriebene Größenänderung —
+  die Pille wächst deshalb über einen **manuellen Ticker** (TimelineView(.animation),
+  easeOutBack 0,38 s, pausiert wenn eingependelt); Beweis über Screenshot-Sonde
+  (DebugHooks: avila.debug.animate/dictate + Pixel-Messung). (2) Sichtbarkeit zählt:
+  Auf dunklen Bildschirmen trägt der FARBRING die Animation — beim Stopp bleibt er
+  jetzt an der schrumpfenden Kapsel und blendet über 0,35 s aus (getickte Opacity)
+  statt eingefroren entfernt zu werden. (3) AVCaptureSession.stopRunning blockierte
+  den Main-Thread beim Stopp → läuft jetzt auf Background-Queue (Delegate vorher
+  synchron abgehängt). (4) Übergänge richtungsabhängig (Aktivieren knackig, Beenden
+  weich ausklingend); Ring = geschlossener Dreifarb-Verlauf (Orange/Rosé/Lila),
+  14-s-Rotation, 1,5-s-Atmen; Idle-Balken pulst alle ~5 s komplett im Verlauf.
+  Perf-Runde 1: Kontext parallel zur STT, vorgewärmte FM-Session pro Modus,
+  Locale-Cache, Stufen-Timing im DebugLog. Performance-Agent zur Tiefenanalyse läuft.
