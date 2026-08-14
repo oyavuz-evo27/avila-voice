@@ -15,6 +15,16 @@ enum RecorderError: Error, LocalizedError {
 /// the STT engines.
 final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private var session: AVCaptureSession?
+    /// Device the warm session was built for ("" = system default).
+    private var sessionDeviceUID: String?
+    /// True only while a dictation writes to the file — the warm session between
+    /// dictations drops every buffer unprocessed.
+    private var isWriting = false
+    private var idleTimer: Timer?
+    /// How long the capture session stays warm after a dictation. Trade-off: the
+    /// macOS microphone indicator stays on during this window, but the next
+    /// dictation starts instantly and loses no word onsets to startRunning.
+    static let warmWindow: TimeInterval = 25
     private var file: AVAudioFile?
     private var converter: AVAudioConverter?
     private var startedAt: Date?
@@ -65,7 +75,9 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     // MARK: - Lifecycle
 
     func start() throws {
-        if session != nil { _ = stop() }
+        if isWriting { _ = stop() }
+        idleTimer?.invalidate()
+        idleTimer = nil
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("avila-\(UUID().uuidString).wav")
@@ -76,15 +88,22 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         currentFileURL = url
         converter = nil
 
-        do {
-            try buildAndStartSession()
-        } catch {
-            file = nil
-            currentFileURL = nil
-            try? FileManager.default.removeItem(at: url)
-            throw error
+        let wantedUID = UserDefaults.standard.string(forKey: "audio.inputDeviceUID") ?? ""
+        if let existing = session, existing.isRunning, sessionDeviceUID == wantedUID {
+            DebugLog.log("recording started — warm session reused")
+        } else {
+            shutdownSession()
+            do {
+                try buildAndStartSession(deviceUID: wantedUID)
+            } catch {
+                file = nil
+                currentFileURL = nil
+                try? FileManager.default.removeItem(at: url)
+                throw error
+            }
         }
 
+        isWriting = true
         startedAt = .now
         lastBufferAt = nil
         didAttemptRecovery = false
@@ -100,7 +119,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         stallTimer = timer
     }
 
-    private func buildAndStartSession() throws {
+    private func buildAndStartSession(deviceUID: String) throws {
         guard let device = Self.selectedDevice() else {
             throw RecorderError.noInputDevice
         }
@@ -116,13 +135,22 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         newSession.addOutput(output)
 
         session = newSession
+        sessionDeviceUID = deviceUID
         newSession.startRunning()
-        DebugLog.log("recording started — capture device '\(device.localizedName)'")
+        DebugLog.log("recording started — capture device '\(device.localizedName)' (cold start)")
     }
 
     /// Stops the recording and returns (file, duration in seconds).
+    /// The capture session stays WARM for `warmWindow` seconds — the next dictation
+    /// then starts instantly and loses no word onsets to startRunning.
     func stop() -> (url: URL, duration: Double)? {
-        teardown()
+        stallTimer?.invalidate()
+        stallTimer = nil
+        isWriting = false
+        scheduleIdleShutdown()
+        if startedAt != nil {
+            DebugLog.log("recording stopped — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel))")
+        }
         defer {
             file = nil
             converter = nil
@@ -140,31 +168,40 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         }
     }
 
-    private func teardown() {
-        stallTimer?.invalidate()
-        stallTimer = nil
-        if let session {
-            self.session = nil
-            // Detach the delegate synchronously so no stray buffer can reach a
-            // future recording's file, then stop on a background queue —
-            // stopRunning blocks for hundreds of ms and would freeze the pill's
-            // shrink animation if run on the main thread.
-            for output in session.outputs {
-                (output as? AVCaptureAudioDataOutput)?.setSampleBufferDelegate(nil, queue: nil)
-            }
-            DispatchQueue.global(qos: .userInitiated).async {
-                session.stopRunning()
-            }
+    private func scheduleIdleShutdown() {
+        idleTimer?.invalidate()
+        let timer = Timer(timeInterval: Self.warmWindow, repeats: false) { [weak self] _ in
+            self?.idleShutdownFired()
         }
-        if startedAt != nil {
-            DebugLog.log("recording stopped — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel))")
+        RunLoop.main.add(timer, forMode: .common)
+        idleTimer = timer
+    }
+
+    private func idleShutdownFired() {
+        guard !isWriting else { return }
+        shutdownSession()
+        DebugLog.log("warm capture session released after \(Int(Self.warmWindow)) s idle")
+    }
+
+    /// Fully tears the session down. Delegate is detached synchronously so no stray
+    /// buffer can reach a future recording's file; stopRunning blocks for hundreds
+    /// of ms and therefore runs on a background queue.
+    private func shutdownSession() {
+        guard let session else { return }
+        self.session = nil
+        sessionDeviceUID = nil
+        for output in session.outputs {
+            (output as? AVCaptureAudioDataOutput)?.setSampleBufferDelegate(nil, queue: nil)
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            session.stopRunning()
         }
     }
 
     // MARK: - Stall watchdog
 
     private func checkStall() {
-        guard file != nil, let startedAt else { return }
+        guard isWriting, file != nil, let startedAt else { return }
         stallTicks += 1
         if stallTicks % 4 == 0 {
             DebugLog.log("capture status — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel)), session running: \(session?.isRunning == true)")
@@ -174,9 +211,9 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         DebugLog.log("audio input stalled (\(lastBufferAt == nil ? "no buffers since start" : "buffers stopped"), session running: \(session?.isRunning == true))")
         if !didAttemptRecovery {
             didAttemptRecovery = true
-            session?.stopRunning()
-            session = nil
-            if (try? buildAndStartSession()) != nil {
+            shutdownSession()
+            let uid = UserDefaults.standard.string(forKey: "audio.inputDeviceUID") ?? ""
+            if (try? buildAndStartSession(deviceUID: uid)) != nil {
                 lastBufferAt = .now // fresh grace period for the rebuilt session
                 DebugLog.log("capture session rebuilt")
                 return
@@ -190,6 +227,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        guard isWriting else { return } // warm idle window: drop everything
         guard let buffer = Self.pcmBuffer(from: sampleBuffer) else { return }
         lastBufferAt = .now
         bufferCount += 1
