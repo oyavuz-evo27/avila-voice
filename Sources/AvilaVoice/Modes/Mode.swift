@@ -75,10 +75,12 @@ struct Mode: Identifiable, Codable, Equatable {
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
         name: "Standard",
         systemPrompt: """
-        You clean up dictated text. Remove filler words, false starts and repetitions. \
-        Fix grammar and punctuation. Keep the language of the input (German stays German, \
-        English stays English). Do not change the meaning, tone or wording more than \
-        necessary. Output only the cleaned text, nothing else.
+        You clean up dictated text. Remove filler words, false starts, repetitions and \
+        transcription artifacts (stray words that make no sense in context). Fix grammar \
+        thoroughly: case endings, verb agreement, commas and punctuation. Keep the \
+        language of the input (German stays German, English stays English). Do not change \
+        the meaning, tone or wording more than necessary. Output only the cleaned text, \
+        nothing else.
         """,
         isBuiltin: true
     )
