@@ -1,10 +1,11 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// A trigger the user can bind: a modifier key, a regular key (with modifiers),
-/// or an extra mouse button.
-enum HotkeyBinding: Codable, Equatable {
-    case modifierKey(keyCode: Int64)          // e.g. right Command (54), right Option (61)
+/// A trigger the user can bind: a modifier key (optionally combined with further
+/// held modifiers, e.g. Fn+⌘), a regular key (with modifiers), or an extra mouse button.
+enum HotkeyBinding: Equatable {
+    /// `extraFlags`: generic CGEventFlags that must additionally be held (0 = none).
+    case modifierKey(keyCode: Int64, extraFlags: UInt64 = 0)
     case key(keyCode: Int64, modifiers: UInt64)
     case mouseButton(number: Int64)           // button 3, 4, 5 … (MX Master side buttons)
 
@@ -13,20 +14,26 @@ enum HotkeyBinding: Codable, Equatable {
 
     var displayName: String {
         switch self {
-        case .modifierKey(let code):
-            if let name = Self.modifierNames[code] { return L(name) }
-            return LF("Key %d", Int(code))
+        case .modifierKey(let code, let extra):
+            let name = Self.modifierNames[code].map { L($0) } ?? LF("Key %d", Int(code))
+            let prefix = Self.flagSymbols(CGEventFlags(rawValue: extra))
+            return prefix.isEmpty ? name : "\(prefix) + \(name)"
         case .key(let code, let mods):
-            let flags = CGEventFlags(rawValue: mods)
-            var parts = ""
-            if flags.contains(.maskControl) { parts += "⌃" }
-            if flags.contains(.maskAlternate) { parts += "⌥" }
-            if flags.contains(.maskShift) { parts += "⇧" }
-            if flags.contains(.maskCommand) { parts += "⌘" }
-            return parts + (Self.keyNames[code] ?? LF("Key %d", Int(code)))
+            let prefix = Self.flagSymbols(CGEventFlags(rawValue: mods))
+            return prefix + (Self.keyNames[code] ?? LF("Key %d", Int(code)))
         case .mouseButton(let n):
             return LF("Mouse %d", Int(n) + 1)
         }
+    }
+
+    private static func flagSymbols(_ flags: CGEventFlags) -> String {
+        var parts = ""
+        if flags.contains(.maskSecondaryFn) { parts += "Fn" }
+        if flags.contains(.maskControl) { parts += "⌃" }
+        if flags.contains(.maskAlternate) { parts += "⌥" }
+        if flags.contains(.maskShift) { parts += "⇧" }
+        if flags.contains(.maskCommand) { parts += "⌘" }
+        return parts
     }
 
     static let modifierNames: [Int64: String] = [
@@ -74,6 +81,14 @@ enum HotkeyBinding: Codable, Equatable {
         return false
     }
 
+    // MARK: Codable — hand-written so older stored bindings (without extraFlags)
+    // keep decoding after the enum gained the combo support.
+
+    private enum CaseKeys: String, CodingKey { case modifierKey, key, mouseButton }
+    private enum ModKeys: String, CodingKey { case keyCode, extraFlags }
+    private enum KeyKeys: String, CodingKey { case keyCode, modifiers }
+    private enum MouseKeys: String, CodingKey { case number }
+
     static let keyNames: [Int64: String] = [
         0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X", 8: "C", 9: "V",
         11: "B", 12: "Q", 13: "W", 14: "E", 15: "R", 16: "Y", 17: "T", 18: "1", 19: "2",
@@ -86,6 +101,45 @@ enum HotkeyBinding: Codable, Equatable {
         118: "F4", 120: "F2", 122: "F1",
         123: "←", 124: "→", 125: "↓", 126: "↑",
     ]
+}
+
+extension HotkeyBinding: Codable {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CaseKeys.self)
+        if c.contains(.modifierKey) {
+            let sub = try c.nestedContainer(keyedBy: ModKeys.self, forKey: .modifierKey)
+            self = .modifierKey(keyCode: try sub.decode(Int64.self, forKey: .keyCode),
+                                extraFlags: try sub.decodeIfPresent(UInt64.self,
+                                                                    forKey: .extraFlags) ?? 0)
+        } else if c.contains(.key) {
+            let sub = try c.nestedContainer(keyedBy: KeyKeys.self, forKey: .key)
+            self = .key(keyCode: try sub.decode(Int64.self, forKey: .keyCode),
+                        modifiers: try sub.decode(UInt64.self, forKey: .modifiers))
+        } else if c.contains(.mouseButton) {
+            let sub = try c.nestedContainer(keyedBy: MouseKeys.self, forKey: .mouseButton)
+            self = .mouseButton(number: try sub.decode(Int64.self, forKey: .number))
+        } else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                                                    debugDescription: "unknown binding case"))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CaseKeys.self)
+        switch self {
+        case .modifierKey(let keyCode, let extraFlags):
+            var sub = c.nestedContainer(keyedBy: ModKeys.self, forKey: .modifierKey)
+            try sub.encode(keyCode, forKey: .keyCode)
+            try sub.encode(extraFlags, forKey: .extraFlags)
+        case .key(let keyCode, let modifiers):
+            var sub = c.nestedContainer(keyedBy: KeyKeys.self, forKey: .key)
+            try sub.encode(keyCode, forKey: .keyCode)
+            try sub.encode(modifiers, forKey: .modifiers)
+        case .mouseButton(let number):
+            var sub = c.nestedContainer(keyedBy: MouseKeys.self, forKey: .mouseButton)
+            try sub.encode(number, forKey: .number)
+        }
+    }
 }
 
 enum HotkeyRole: String {
@@ -115,7 +169,9 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     var onHandsFreeToggle: (@MainActor @Sendable () -> Void)?
 
     private var captureHandler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?
-    private var captureModifierCandidate: Int64?
+    /// Modifier keys currently held during capture, in press order — a combo like
+    /// Fn+⌘ is finalized when the first of them is released.
+    private var captureHeldModifiers: [Int64] = []
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -128,7 +184,7 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     func setCaptureHandler(_ handler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?) {
         let old = captureHandler
         captureHandler = handler
-        captureModifierCandidate = nil
+        captureHeldModifiers = []
         if let old {
             dispatch { old(nil) }
         }
@@ -263,10 +319,17 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     private func edge(of binding: HotkeyBinding, type: CGEventType, event: CGEvent,
                       wasDown: Bool) -> Edge? {
         switch binding {
-        case .modifierKey(let code):
+        case .modifierKey(let code, let extra):
             guard type == .flagsChanged,
                   event.getIntegerValueField(.keyboardEventKeycode) == code else { return nil }
-            return HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags) ? .down : .up
+            if HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags) {
+                // The press only counts when the additional modifiers (e.g. Fn) are
+                // held too — otherwise the bare key passes through to other apps.
+                return event.flags.rawValue & extra == extra ? .down : nil
+            }
+            // The release matches regardless of the extra modifiers (they may have
+            // been released first), but only if the press was ours.
+            return wasDown ? .up : nil
 
         case .key(let code, let mods):
             guard type == .keyDown || type == .keyUp,
@@ -297,9 +360,10 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
         switch type {
         case .keyDown:
             let code = event.getIntegerValueField(.keyboardEventKeycode)
-            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
+            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl,
+                                          .maskShift, .maskSecondaryFn]
             let mods = event.flags.rawValue & relevant.rawValue
-            captureModifierCandidate = nil
+            captureHeldModifiers = []
             if code == 53 && mods == 0 { // bare Esc cancels
                 finishCapture(with: nil)
                 return nil
@@ -308,14 +372,20 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
             return nil
 
         case .flagsChanged:
-            // A modifier-only binding is taken on RELEASE (without an intervening key),
-            // so combinations like ⌘K remain recordable.
+            // Modifier-only bindings — including combos like Fn+⌘ — are taken when
+            // the FIRST held modifier is released (without an intervening key).
             let code = event.getIntegerValueField(.keyboardEventKeycode)
             guard HotkeyBinding.modifierMask(for: code) != nil else { return nil }
             if HotkeyBinding.modifierIsDown(keyCode: code, flags: event.flags) {
-                captureModifierCandidate = code
-            } else if captureModifierCandidate == code {
-                finishCapture(with: .modifierKey(keyCode: code))
+                if !captureHeldModifiers.contains(code) {
+                    captureHeldModifiers.append(code)
+                }
+            } else if captureHeldModifiers.contains(code) {
+                let extras = captureHeldModifiers.filter { $0 != code }
+                let extraFlags = extras
+                    .compactMap { HotkeyBinding.modifierMask(for: $0)?.rawValue }
+                    .reduce(0, |)
+                finishCapture(with: .modifierKey(keyCode: code, extraFlags: extraFlags))
             }
             return nil
 
@@ -335,7 +405,7 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     private func finishCapture(with binding: HotkeyBinding?) {
         let handler = captureHandler
         captureHandler = nil
-        captureModifierCandidate = nil
+        captureHeldModifiers = []
         pttPressedAt = nil
         handsFreeDown = false
         dispatch { handler?(binding) }
