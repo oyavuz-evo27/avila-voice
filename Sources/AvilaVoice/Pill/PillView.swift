@@ -59,39 +59,40 @@ struct PillView: View {
                 }
             }
 
-            // Equal-width side slots keep the pill EXACTLY centered, and bottom
-            // alignment anchors its lower edge — so it grows notch-like: evenly to
-            // the left and right, and upward only.
-            HStack(alignment: .bottom, spacing: 2) {
-                accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
-                    .opacity(showAccessories ? 1 : 0)
-                    .scaleEffect(showAccessories ? 1 : 0.6)
-                    .allowsHitTesting(showAccessories)
-                    .onHover { over in hoverCopy = over; updateVisibility() }
-                    .onTapGesture { leftAction() }
-                    .padding(.bottom, 6)
-                    .offset(x: 4) // nudge toward the pill (its 6 pt hit margin separates them)
-                    .frame(width: 52, alignment: .trailing)
-
+            // The ZStack itself centers the pill — symmetric growth from the middle
+            // is guaranteed by construction (Dynamic-Island style), the bottom edge
+            // stays anchored. The accessories ride outward with the growing width.
+            ZStack(alignment: .bottom) {
                 pill
 
-                accessory(text: L("Modes"), hovering: hoverModes)
-                    .help(L("Modes"))
-                    .accessibilityLabel(L("Modes"))
-                    .opacity(showAccessories ? 1 : 0)
-                    .scaleEffect(showAccessories ? 1 : 0.6)
-                    .allowsHitTesting(showAccessories)
-                    .onHover { over in hoverModes = over; updateVisibility() }
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                            modeListOpen.toggle()
+                HStack(spacing: 4) {
+                    accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
+                        .opacity(showAccessories ? 1 : 0)
+                        .scaleEffect(showAccessories ? 1 : 0.6)
+                        .allowsHitTesting(showAccessories)
+                        .onHover { over in hoverCopy = over; updateVisibility() }
+                        .onTapGesture { leftAction() }
+
+                    Color.clear
+                        .frame(width: pillSize.width + 18, height: 1)
+                        .allowsHitTesting(false)
+
+                    accessory(text: L("Modes"), hovering: hoverModes)
+                        .help(L("Modes"))
+                        .accessibilityLabel(L("Modes"))
+                        .opacity(showAccessories ? 1 : 0)
+                        .scaleEffect(showAccessories ? 1 : 0.6)
+                        .allowsHitTesting(showAccessories)
+                        .onHover { over in hoverModes = over; updateVisibility() }
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                modeListOpen.toggle()
+                            }
                         }
-                    }
-                    .padding(.bottom, 6)
-                    .offset(x: -4) // nudge toward the pill
-                    .frame(width: 52, alignment: .leading)
+                }
+                .padding(.bottom, 8)
+                .animation(.spring(response: 0.25, dampingFraction: 0.85), value: showAccessories)
             }
-            .animation(.spring(response: 0.25, dampingFraction: 0.85), value: showAccessories)
         }
         .padding(.bottom, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
