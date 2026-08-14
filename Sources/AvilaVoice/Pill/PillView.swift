@@ -58,6 +58,12 @@ struct PillView: View {
     /// vanishes instantly-ish, the new one fades in only once the shape has room.
     private static let contentSwap: AnyTransition = .asymmetric(
         insertion: .opacity.animation(.easeIn(duration: 0.16).delay(0.12)),
+        removal: .opacity.animation(.easeOut(duration: 0.05)))
+
+    /// Only the waveform lingers a little on its way out (stop reads as a snap
+    /// otherwise); everything else vanishes crisply.
+    private static let waveformSwap: AnyTransition = .asymmetric(
+        insertion: .opacity.animation(.easeIn(duration: 0.16).delay(0.12)),
         removal: .opacity.animation(.easeOut(duration: 0.18)))
 
     private let warmOrange = Color(red: 1.00, green: 0.45, blue: 0.25)
@@ -345,7 +351,7 @@ struct PillView: View {
             switch state.phase {
             case .recording:
                 waveform
-                    .transition(Self.contentSwap)
+                    .transition(Self.waveformSwap)
             case .processing:
                 ProgressView()
                     .controlSize(.small)
@@ -374,9 +380,12 @@ struct PillView: View {
         .overlay {
             if isRecording {
                 recordingGlow
-                    // Fade out WHILE the capsule shrinks — an instantly vanishing
-                    // ring made the whole stop read as a snap.
-                    .transition(.opacity.animation(.easeOut(duration: 0.25)))
+                    // Appears instantly with the growth (as in the state the user
+                    // approved); only the EXIT fades — an instantly vanishing ring
+                    // made the stop read as a snap.
+                    .transition(.asymmetric(
+                        insertion: .identity,
+                        removal: .opacity.animation(.easeOut(duration: 0.25))))
             }
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
