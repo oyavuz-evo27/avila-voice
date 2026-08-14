@@ -199,18 +199,14 @@ struct ModeEditor: View {
         Form {
             Section {
                 TextField(L("Name"), text: $mode.name)
-                    .disabled(mode.isBuiltin)
             }
             Section(L("AI instruction")) {
                 TextEditor(text: $mode.systemPrompt)
                     .font(.system(size: 11))
                     .frame(minHeight: 120)
-                    .disabled(mode.isBuiltin)
-                if mode.isBuiltin {
-                    Text(L("builtin.readonly"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(L("instruction.hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section(L("Context")) {
                 Toggle(L("Active app"), isOn: $mode.context.activeApp)

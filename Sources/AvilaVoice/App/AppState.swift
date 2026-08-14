@@ -16,7 +16,9 @@ enum DictationPhase: Equatable {
 final class AppState: ObservableObject {
     static let shared = AppState()
 
-    @Published var phase: DictationPhase = .idle
+    @Published var phase: DictationPhase = .idle {
+        didSet { hotkeys.recordingActive = (phase == .recording) }
+    }
     @Published var audioLevel: Float = 0
     @Published var modes: [Mode] = Mode.builtins
     @Published var selectedModeID: UUID = Mode.standard.id
@@ -77,6 +79,7 @@ final class AppState: ObservableObject {
         hotkeys.onPTTDown = { [weak self] in self?.hotkeyDown() }
         hotkeys.onPTTUp = { [weak self] held in self?.hotkeyUp(heldFor: held) }
         hotkeys.onHandsFreeToggle = { [weak self] in self?.handsFreeToggle() }
+        hotkeys.onEscapeCancel = { [weak self] in self?.cancelRecording() }
         hotkeys.onStatusChange = { [weak self] active in self?.hotkeysActive = active }
         hotkeys.start()
         Task.detached { [sttEngine] in await sttEngine.warmUp() }

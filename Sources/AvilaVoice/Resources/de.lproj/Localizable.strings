@@ -56,7 +56,7 @@
 "Clipboard" = "Zwischenablage";
 "Screen text (screenshot OCR)" = "Bildschirmtext (Screenshot-OCR)";
 "New mode" = "Neuer Modus";
-"builtin.readonly" = "Integrierter Modus: Name und Anweisung sind fest — der Kontext ist einstellbar.";
+"instruction.hint" = "Wird bei jedem Diktat dieses Modus angewendet — zwischen Transkription und Einfügen. Änderungen gelten sofort.";
 "modes.select" = "Wählen Sie links einen Modus oder legen Sie mit + einen neuen an.";
 "dictionary.hint" = "Fachbegriffe und Namen, die korrekt geschrieben werden müssen (gilt für alle Modi):";
 "dictionary.placeholder" = "Neues Wort (z. B. Navision)";

@@ -169,6 +169,10 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
     var onPTTDown: (@MainActor @Sendable () -> Void)?
     var onPTTUp: (@MainActor @Sendable (_ heldFor: TimeInterval) -> Void)?
     var onHandsFreeToggle: (@MainActor @Sendable () -> Void)?
+    /// Esc pressed while a recording is active — cancel without transcribing.
+    var onEscapeCancel: (@MainActor @Sendable () -> Void)?
+    /// Kept in sync by AppState; read on the event-tap thread.
+    var recordingActive = false
 
     private var captureHandler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?
     /// Modifier keys currently held during capture, in press order — a combo like
@@ -274,6 +278,15 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
         // Capture mode for the settings recorder.
         if captureHandler != nil {
             return handleCapture(type: type, event: event)
+        }
+
+        // Esc during a recording cancels it (and never reaches other apps).
+        if recordingActive, type == .keyDown || type == .keyUp,
+           event.getIntegerValueField(.keyboardEventKeycode) == 53 {
+            if type == .keyDown {
+                dispatch { [onEscapeCancel] in onEscapeCancel?() }
+            }
+            return nil
         }
 
         // Push-to-talk binding.

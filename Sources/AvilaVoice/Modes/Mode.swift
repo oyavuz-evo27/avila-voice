@@ -18,13 +18,13 @@ struct Mode: Identifiable, Codable, Equatable {
     var context: ContextOptions
     var isBuiltin: Bool
 
-    /// Localized name for built-in modes; custom modes keep the user's name.
+    /// Localized name for built-in modes — but a user rename always wins.
     var displayName: String {
         guard isBuiltin else { return name }
         switch id {
-        case Mode.standard.id: return L("mode.standard")
-        case Mode.email.id: return L("mode.email")
-        case Mode.translate.id: return L("mode.translate")
+        case Mode.standard.id where name == Mode.standard.name: return L("mode.standard")
+        case Mode.email.id where name == Mode.email.name: return L("mode.email")
+        case Mode.translate.id where name == Mode.translate.name: return L("mode.translate")
         default: return name
         }
     }
