@@ -15,7 +15,8 @@ struct PillView: View {
     @State private var copiedFlash = false
     @State private var orbitA: Double = 0
     @State private var orbitB: Double = 180
-    @State private var idlePulse = false
+    @State private var idleGlow: Double = 0
+    @State private var idlePulseTask: Task<Void, Never>?
     @State private var bars: [CGFloat] = Array(repeating: 0, count: 17)
 
     /// Center-weighted envelope: middle bars swing the most, outer ones stay calm.
@@ -30,6 +31,7 @@ struct PillView: View {
 
     private let warmOrange = Color(red: 1.00, green: 0.45, blue: 0.25)
     private let warmPink = Color(red: 0.96, green: 0.22, blue: 0.44)
+    private let warmPurple = Color(red: 0.62, green: 0.32, blue: 0.85)
 
     var body: some View {
         VStack(spacing: 6) {
@@ -308,30 +310,36 @@ struct PillView: View {
         }
     }
 
-    /// The idle line: stays gray — its outline breathes a soft warm glow that slowly
-    /// appears and fades again.
+    /// The idle line: gray at rest. Every few seconds the WHOLE bar lights up once
+    /// in warm orange → pink → purple, then slowly fades back to gray — subtle,
+    /// but noticeable.
     private var idleLine: some View {
         Capsule()
             .fill(.white.opacity(hoverPill ? 0.55 : 0.35))
             .overlay {
                 Capsule()
-                    .stroke(
-                        LinearGradient(colors: [warmOrange, warmPink],
-                                       startPoint: .leading, endPoint: .trailing),
-                        lineWidth: 0.8)
-                    .shadow(color: warmPink.opacity(0.4), radius: 2.5)
-                    .opacity(idlePulse ? 0.6 : 0.0)
+                    .fill(LinearGradient(colors: [warmOrange, warmPink, warmPurple],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .shadow(color: warmPink.opacity(0.55 * idleGlow), radius: 4)
+                    .opacity(idleGlow)
             }
             .frame(width: 26, height: 4)
             .onAppear {
-                // Reset and animate in SEPARATE update cycles — otherwise the second
-                // appearance nets to "no change" and repeatForever never starts.
-                idlePulse = false
-                DispatchQueue.main.async {
-                    withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                        idlePulse = true
+                idlePulseTask?.cancel()
+                idlePulseTask = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    while !Task.isCancelled {
+                        withAnimation(.easeIn(duration: 0.7)) { idleGlow = 1 }
+                        try? await Task.sleep(for: .seconds(0.9))
+                        withAnimation(.easeOut(duration: 1.7)) { idleGlow = 0 }
+                        try? await Task.sleep(for: .seconds(4.5))
                     }
                 }
+            }
+            .onDisappear {
+                idlePulseTask?.cancel()
+                idlePulseTask = nil
+                idleGlow = 0
             }
     }
 
