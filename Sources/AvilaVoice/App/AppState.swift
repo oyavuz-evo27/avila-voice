@@ -247,16 +247,20 @@ final class AppState: ObservableObject {
                 }
                 // Context (incl. screenshot OCR) runs IN PARALLEL with the STT —
                 // serializing the two cost up to a second per dictation.
+                let sttStarted = Date()
                 async let contextFuture: DictationContext? = mode.context.any
                     ? ContextCollector.collect(mode.context)
                     : nil
                 let raw = try await sttEngine.transcribe(fileURL: url)
                 let context = await contextFuture
+                DebugLog.log(String(format: "timing: stt+context %.0f ms (%d Zeichen)",
+                                    Date().timeIntervalSince(sttStarted) * 1000, raw.count))
                 guard !Task.isCancelled else { return }
                 // The LLM step must never lose a successful transcript: any
                 // enhancement failure (guardrails, context window) falls back to raw.
                 var final = raw
                 if await llmEngine.isAvailable() {
+                    let llmStarted = Date()
                     do {
                         final = try await llmEngine.enhance(transcript: raw, mode: mode,
                                                             dictionary: dictionary,
@@ -264,6 +268,8 @@ final class AppState: ObservableObject {
                     } catch {
                         NSLog("AvilaVoice: enhancement failed, using raw transcript — \(error.localizedDescription)")
                     }
+                    DebugLog.log(String(format: "timing: llm %.0f ms",
+                                        Date().timeIntervalSince(llmStarted) * 1000))
                 }
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
@@ -300,7 +306,11 @@ final class AppState: ObservableObject {
     }
 
     private func deliver(raw: String, final: String, mode: Mode, duration: Double) {
+        let insertStarted = Date()
         let inserted = TextInserter.hasEditableFocus() && TextInserter.insert(final)
+        DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
+                            Date().timeIntervalSince(insertStarted) * 1000,
+                            inserted ? "ja" : "nein"))
         if !inserted {
             TextInserter.copyToClipboard(final)
         }
