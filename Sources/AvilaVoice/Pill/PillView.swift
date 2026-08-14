@@ -253,7 +253,7 @@ struct PillView: View {
             switch state.phase {
             case .recording:
                 waveform
-                    .frame(width: 100, height: 24)
+                    .frame(width: 92, height: 20)
             case .processing:
                 ProgressView()
                     .controlSize(.small)
@@ -371,8 +371,8 @@ struct PillView: View {
     /// more than the edges.
     private func updateBars(level: CGFloat) {
         for i in bars.indices {
-            let target = level * Self.barWeights[i] * CGFloat.random(in: 0.55...1.0)
-            bars[i] = bars[i] * 0.45 + target * 0.55
+            let target = level * Self.barWeights[i] * CGFloat.random(in: 0.7...1.0)
+            bars[i] = bars[i] * 0.55 + target * 0.45 // more inertia — calmer motion
         }
     }
 
@@ -382,7 +382,7 @@ struct PillView: View {
                 Capsule()
                     .fill(.white)
                     .frame(width: 2.5,
-                           height: max(2.5, bars[i] * 20))
+                           height: max(2, bars[i] * 15))
             }
         }
         .animation(.linear(duration: 0.08), value: bars)
