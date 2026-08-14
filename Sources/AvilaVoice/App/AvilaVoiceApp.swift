@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             PillPanel.shared.show()
             PermissionRequester.requestOnFirstLaunch()
             registerLoginItemOnFirstLaunch()
+            DebugHooks.install()
         }
     }
 

@@ -48,6 +48,17 @@ final class AppState: ObservableObject {
         modes.first { $0.id == selectedModeID } ?? .standard
     }
 
+    /// The pill's growth animation MUST be driven at the source: value-based
+    /// `.animation(value:)` modifiers are ignored in the hosting panel (verified
+    /// frame-by-frame), while `withAnimation` transactions render fine.
+    static let phaseSpring = Animation.interpolatingSpring(mass: 1, stiffness: 400, damping: 30)
+
+    func setPhase(_ newPhase: DictationPhase) {
+        withAnimation(Self.phaseSpring) {
+            phase = newPhase
+        }
+    }
+
     private init() {
         loadModes()
         loadDictionary()
@@ -197,7 +208,7 @@ final class AppState: ObservableObject {
         PillPanel.shared.reposition() // jump to the screen the user is working on
         do {
             try recorder.start()
-            phase = .recording
+            setPhase(.recording)
             Sounds.playStart()
         } catch {
             setError(LF("error.microphone", error.localizedDescription))
@@ -207,11 +218,11 @@ final class AppState: ObservableObject {
     func finishRecording() {
         guard case .recording = phase else { return }
         guard let (url, duration) = recorder.stop() else {
-            phase = .idle
+            setPhase(.idle)
             return
         }
         Sounds.playStop()
-        phase = .processing
+        setPhase(.processing)
         let mode = selectedMode
         let dictionary = dictionaryWords
         pipelineGeneration += 1
@@ -267,7 +278,7 @@ final class AppState: ObservableObject {
         guard case .recording = phase else { return }
         recorder.cancel()
         pushToTalkActive = false
-        phase = .idle
+        setPhase(.idle)
     }
 
     func cancelProcessing() {
@@ -275,7 +286,7 @@ final class AppState: ObservableObject {
         pipelineGeneration += 1 // invalidate the running task's delivery
         pipelineTask?.cancel()
         pipelineTask = nil
-        phase = .idle
+        setPhase(.idle)
     }
 
     private func deliver(raw: String, final: String, mode: Mode, duration: Double) {
@@ -288,18 +299,18 @@ final class AppState: ObservableObject {
         history.add(DictationRecord(rawTranscript: raw, finalText: final,
                                     modeName: mode.displayName, wasInserted: inserted,
                                     durationSeconds: duration))
-        phase = .result(inserted: inserted)
+        setPhase(.result(inserted: inserted))
         // Return to idle after a grace period (pill hover keeps the text reachable).
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            if case .result = self?.phase { self?.phase = .idle }
+            if case .result = self?.phase { self?.setPhase(.idle) }
         }
     }
 
     /// Shows an error in the pill and clears it automatically.
     private func setError(_ message: String) {
-        phase = .error(message)
+        withAnimation(Self.phaseSpring) { phase = .error(message) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            if case .error = self?.phase { self?.phase = .idle }
+            if case .error = self?.phase { self?.setPhase(.idle) }
         }
     }
 
