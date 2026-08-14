@@ -18,12 +18,17 @@ actor FoundationModelsEngine: EnhancementEngine {
         SystemLanguageModel.default.availability == .available
     }
 
+    private static func instructions(for mode: Mode) -> String {
+        mode.systemPrompt + "\n\n" + PromptBuilder.policy
+    }
+
     func prewarm(mode: Mode) async {
         guard SystemLanguageModel.default.availability == .available else { return }
-        guard spare?.modeID != mode.id || spare?.instructions != mode.systemPrompt else { return }
-        let session = LanguageModelSession(instructions: mode.systemPrompt)
+        let combined = Self.instructions(for: mode)
+        guard spare?.modeID != mode.id || spare?.instructions != combined else { return }
+        let session = LanguageModelSession(instructions: combined)
         session.prewarm()
-        spare = (mode.id, mode.systemPrompt, session)
+        spare = (mode.id, combined, session)
     }
 
     func enhance(transcript: String,
@@ -40,12 +45,13 @@ actor FoundationModelsEngine: EnhancementEngine {
 
         // Use the prewarmed session when it matches; sessions are single-use here so
         // no context bleeds between dictations.
+        let combined = Self.instructions(for: mode)
         let session: LanguageModelSession
-        if let spare, spare.modeID == mode.id, spare.instructions == mode.systemPrompt {
+        if let spare, spare.modeID == mode.id, spare.instructions == combined {
             session = spare.session
             self.spare = nil
         } else {
-            session = LanguageModelSession(instructions: mode.systemPrompt)
+            session = LanguageModelSession(instructions: combined)
         }
 
         let prompt = PromptBuilder.userPrompt(transcript: transcript,

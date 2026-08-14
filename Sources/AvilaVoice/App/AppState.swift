@@ -299,6 +299,12 @@ final class AppState: ObservableObject {
                     }
                     DebugLog.log(String(format: "timing: llm %.0f ms",
                                         Date().timeIntervalSince(llmStarted) * 1000))
+                    // Emergency brake: an output massively longer than the dictation
+                    // means the model broke role (echoed context, wrote commentary).
+                    if final.count > raw.count * 3 + 300 {
+                        DebugLog.log("llm output REJECTED (\(final.count) chars vs raw \(raw.count)) — inserting raw transcript")
+                        final = raw
+                    }
                 } else if words < 4 {
                     DebugLog.log("timing: llm skipped (short dictation, \(words) words)")
                 }
