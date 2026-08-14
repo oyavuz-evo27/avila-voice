@@ -66,25 +66,24 @@ enum ContextCollector {
         }
     }
 
-    private static func recognizeText(in image: CGImage) async throws -> String? {
+    /// `nonisolated` and free of completion closures: Vision invokes callbacks on its
+    /// own background queue — a MainActor-bound closure there trips the Swift runtime
+    /// isolation check and kills the app (SIGTRAP). perform() is synchronous, so the
+    /// results are simply read afterwards on the worker queue.
+    private nonisolated static func recognizeText(in image: CGImage) async throws -> String? {
         try await withCheckedThrowingContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                let lines = (request.results as? [VNRecognizedTextObservation])?
-                    .compactMap { $0.topCandidates(1).first?.string } ?? []
-                continuation.resume(returning: lines.isEmpty
-                                    ? nil
-                                    : lines.joined(separator: "\n"))
-            }
-            request.recognitionLevel = .fast
-            request.recognitionLanguages = ["de-DE", "en-US"]
-            let handler = VNImageRequestHandler(cgImage: image)
             DispatchQueue.global(qos: .userInitiated).async {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLevel = .fast
+                request.recognitionLanguages = ["de-DE", "en-US"]
+                let handler = VNImageRequestHandler(cgImage: image)
                 do {
                     try handler.perform([request])
+                    let lines = (request.results ?? [])
+                        .compactMap { $0.topCandidates(1).first?.string }
+                    continuation.resume(returning: lines.isEmpty
+                                        ? nil
+                                        : lines.joined(separator: "\n"))
                 } catch {
                     continuation.resume(throwing: error)
                 }
