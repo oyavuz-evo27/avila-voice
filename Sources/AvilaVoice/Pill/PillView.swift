@@ -14,7 +14,7 @@ struct PillView: View {
     @State private var modeListOpen = false
     @State private var copiedFlash = false
     @State private var orbitA: Double = 0
-    @State private var orbitB: Double = 180
+    @State private var ringPulse = false
     @State private var idleGlow: Double = 0
     @State private var idlePulseTask: Task<Void, Never>?
     @State private var bars: [CGFloat] = Array(repeating: 0, count: 17)
@@ -355,46 +355,35 @@ struct PillView: View {
             }
     }
 
-    /// Two soft shimmer segments drifting slowly around the pill border — at slightly
-    /// different speeds, so they are never perfectly parallel.
+    /// The full border carries the warm three-color gradient (orange → pink →
+    /// purple), closed into a seamless ring that rotates very slowly.
     private var recordingGlow: some View {
-        ZStack {
-            orbitStroke(angle: orbitA)
-            orbitStroke(angle: orbitB)
-        }
-        .shadow(color: warmPink.opacity(0.22), radius: 4)
-        .onAppear {
-            // Reset and animate in SEPARATE update cycles — otherwise the second
-            // recording nets to "no change" and the shimmer freezes.
-            orbitA = 0
-            orbitB = 180
-            DispatchQueue.main.async {
-                withAnimation(.linear(duration: 12.0).repeatForever(autoreverses: false)) {
-                    orbitA = 360
-                }
-                withAnimation(.linear(duration: 17.0).repeatForever(autoreverses: false)) {
-                    orbitB = 540
-                }
-            }
-        }
-    }
-
-    /// One gently fading gradient segment (~a quarter of the border).
-    private func orbitStroke(angle: Double) -> some View {
         Capsule()
             .strokeBorder(
                 AngularGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: .clear, location: 0.00),
-                        .init(color: warmOrange.opacity(0.0), location: 0.04),
-                        .init(color: warmOrange.opacity(0.55), location: 0.13),
-                        .init(color: warmPink.opacity(0.55), location: 0.22),
-                        .init(color: warmPink.opacity(0.0), location: 0.30),
-                        .init(color: .clear, location: 1.00),
+                    gradient: Gradient(colors: [
+                        warmOrange, warmPink, warmPurple, warmPink, warmOrange,
                     ]),
                     center: .center,
-                    angle: .degrees(angle)),
+                    angle: .degrees(orbitA)),
                 lineWidth: 1.5)
+            .opacity(ringPulse ? 1.0 : 0.45)
+            .shadow(color: warmPink.opacity(ringPulse ? 0.4 : 0.15),
+                    radius: ringPulse ? 6 : 3)
+            .onAppear {
+                // Reset and animate in SEPARATE update cycles — otherwise the second
+                // recording nets to "no change" and the animations freeze.
+                orbitA = 0
+                ringPulse = false
+                DispatchQueue.main.async {
+                    withAnimation(.linear(duration: 14.0).repeatForever(autoreverses: false)) {
+                        orbitA = 360
+                    }
+                    withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                        ringPulse = true
+                    }
+                }
+            }
     }
 
     /// Live waveform: every bar reflects the current input level (no scrolling
