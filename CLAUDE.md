@@ -157,3 +157,20 @@ unter „Lokal" ergänzen).
   14-s-Rotation, 1,5-s-Atmen; Idle-Balken pulst alle ~5 s komplett im Verlauf.
   Perf-Runde 1: Kontext parallel zur STT, vorgewärmte FM-Session pro Modus,
   Locale-Cache, Stufen-Timing im DebugLog. Performance-Agent zur Tiefenanalyse läuft.
+- **2026-08-14 (Abend) — v0.1.0 VERÖFFENTLICHT, Projekt geht in Onurs Testphase.**
+  Perf-Agent-Analyse (gemessen): LLM = ~80 % der Latenz (350–1160 ms), STT nur
+  65–160 ms → Maßnahmen: LLM-Skip <4 Wörter (behebt auch Sprachflip-Bug bei
+  Kurzdiktaten), echter STT-Modell-Warmlauf, Kontext-Erfassung beim Aufnahme-START,
+  warme Capture-Session (25 s) + 0,6-s-Pre-Roll (Wortanfänge!), native
+  Aufnahmequalität statt früher 16-kHz-Downsample. Sicherheits-Fix: LLM-Rollen-
+  Ausbruch (Diktat klang wie Auftrag + Clipboard-Kontext → Modell echote Kontext
+  und schrieb Korrekturliste) → PromptBuilder.policy engine-seitig an jede
+  Modus-Anweisung angehängt + Notbremse (Ausgabe >3× Transkript verworfen).
+  Modi voll verwaltbar (auch Builtins löschbar, persistiert). Accessories exakt
+  zentriert/symmetrisch. README release-tauglich (xattr-Quarantäne-Schritt!),
+  **Release v0.1.0 mit AvilaVoice.zip via GitHub Actions gebaut**:
+  https://github.com/oyavuz-evo27/avila-voice/releases/tag/v0.1.0
+  Onur testet jetzt 1–2 Wochen im Alltag (Ziel: Wispr-Flow-Abo ersetzt, „90 %
+  genauso gut"); Wochenende: Installation auf privatem MacBook Air M1 nach README.
+  Nächster großer Baustein auf Abruf: **Parakeet-v3-Engine** (Erkennungsqualität,
+  Fall „Modell→Hotel"), danach MLX-LLM-Stufe (Qwen3.5-4B/Gemma 4).
