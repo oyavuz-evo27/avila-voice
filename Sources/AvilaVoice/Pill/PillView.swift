@@ -115,34 +115,41 @@ struct PillView: View {
             ZStack(alignment: .bottom) {
                 pill
 
-                HStack(spacing: 4) {
-                    accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
-                        .opacity(showAccessories ? 1 : 0)
-                        .scaleEffect(showAccessories ? 1 : 0.6)
-                        .allowsHitTesting(showAccessories)
-                        .onHover { over in hoverCopy = over; updateVisibility() }
-                        .onTapGesture { leftAction() }
+                // The whole accessory row is driven by the same ticked pill size, so
+                // the buttons stay EXACTLY on the pill's vertical center and glide
+                // outward while it grows.
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: growFinished)) { timeline in
+                    let size = currentPillSize(at: timeline.date)
+                    HStack(spacing: 4) {
+                        accessory(leftIcon, hovering: hoverCopy, help: leftHelp)
+                            .opacity(showAccessories ? 1 : 0)
+                            .scaleEffect(showAccessories ? 1 : 0.6)
+                            .allowsHitTesting(showAccessories)
+                            .onHover { over in hoverCopy = over; updateVisibility() }
+                            .onTapGesture { leftAction() }
 
-                    TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: growFinished)) { timeline in
                         Color.clear
-                            .frame(width: currentPillSize(at: timeline.date).width + 18, height: 1)
-                    }
-                    .allowsHitTesting(false)
+                            .frame(width: size.width + 18, height: 1)
+                            .allowsHitTesting(false)
 
-                    accessory(text: L("Modes"), hovering: hoverModes)
-                        .help(L("Modes"))
-                        .accessibilityLabel(L("Modes"))
-                        .opacity(showAccessories ? 1 : 0)
-                        .scaleEffect(showAccessories ? 1 : 0.6)
-                        .allowsHitTesting(showAccessories)
-                        .onHover { over in hoverModes = over; updateVisibility() }
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                                modeListOpen.toggle()
+                        accessory(text: L("Modes"), hovering: hoverModes)
+                            .help(L("Modes"))
+                            .accessibilityLabel(L("Modes"))
+                            .opacity(showAccessories ? 1 : 0)
+                            .scaleEffect(showAccessories ? 1 : 0.6)
+                            .allowsHitTesting(showAccessories)
+                            .onHover { over in hoverModes = over; updateVisibility() }
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                    modeListOpen.toggle()
+                                }
                             }
-                        }
+                    }
+                    // Align accessory centers to the VISIBLE pill center:
+                    // 6 pt invisible margin + half the visible pill height − half
+                    // the accessory height (23 pt).
+                    .padding(.bottom, 6 + (size.height + 8) / 2 - 11.5)
                 }
-                .padding(.bottom, 8)
                 // showAccessories changes are animated at the source (updateVisibility)
                 // — an .animation(value:) modifier here would strip the phase-growth
                 // animation from the accessories.
