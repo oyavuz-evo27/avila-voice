@@ -45,6 +45,9 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
 
     /// Called on an audio thread with the current input level (0…1).
     var onLevel: (@Sendable (Float) -> Void)?
+    /// Called on the capture queue with every recorded buffer (incl. pre-roll) —
+    /// feeds the live transcriber.
+    var onBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
     /// Fired when capture is genuinely lost (device gone, rebuild failed).
     var onConfigurationChange: (@Sendable () -> Void)?
 
@@ -114,7 +117,10 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
             guard let self else { return }
             if !self.preRoll.isEmpty {
                 DebugLog.log(String(format: "pre-roll: prepending %.2f s", self.preRollSeconds))
-                for buffered in self.preRoll { self.append(buffered) }
+                for buffered in self.preRoll {
+                    self.append(buffered)
+                    self.onBuffer?(buffered)
+                }
             }
             self.preRoll = []
             self.preRollSeconds = 0
@@ -257,6 +263,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         bufferCount += 1
         publishLevel(of: buffer)
         append(buffer)
+        onBuffer?(buffer)
     }
 
     private static func pcmBuffer(from sample: CMSampleBuffer) -> AVAudioPCMBuffer? {

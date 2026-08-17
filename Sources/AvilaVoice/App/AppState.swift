@@ -33,6 +33,11 @@ final class AppState: ObservableObject {
     @Published var hotkeysActive = false
     /// Growing LLM output while processing — shown in the pill's bubble.
     @Published var streamingPreview: String = ""
+    /// Live transcript while recording — shown above the pill as you speak.
+    @Published var livePreview: String = ""
+
+    private let liveTranscriber = LiveTranscriber()
+    private var liveActive = false
 
     let history = HistoryStore()
     let stats = StatsStore()
@@ -87,6 +92,15 @@ final class AppState: ObservableObject {
     func startServices() {
         recorder.onLevel = { [weak self] level in
             DispatchQueue.main.async { self?.audioLevel = level }
+        }
+        recorder.onBuffer = { [liveTranscriber] buffer in
+            liveTranscriber.append(buffer)
+        }
+        liveTranscriber.onPartial = { [weak self] text in
+            DispatchQueue.main.async {
+                guard let self, case .recording = self.phase else { return }
+                self.livePreview = text
+            }
         }
         recorder.onConfigurationChange = { [weak self] in
             DispatchQueue.main.async {
@@ -219,6 +233,20 @@ final class AppState: ObservableObject {
         guard phase != .recording, phase != .processing else { return }
         PillPanel.shared.reposition() // jump to the screen the user is working on
         do {
+            livePreview = ""
+            liveActive = false
+            // Live transcription: start the analyzer session first so even the
+            // pre-roll buffers reach it. Failure is non-fatal (file STT fallback).
+            let locale = Locale(identifier: UserDefaults.standard.string(forKey: "stt.locale") ?? "de-DE")
+            let transcriber = liveTranscriber
+            Task {
+                do {
+                    try await transcriber.start(locale: locale)
+                    await MainActor.run { self.liveActive = true }
+                } catch {
+                    DebugLog.log("live stt unavailable — file fallback: \(error.localizedDescription)")
+                }
+            }
             try recorder.start()
             setPhase(.recording)
             Sounds.playStart()
@@ -242,6 +270,9 @@ final class AppState: ObservableObject {
         }
         Sounds.playStop()
         streamingPreview = ""
+        let useLive = liveActive
+        liveActive = false
+        if !useLive { liveTranscriber.cancel() }
         setPhase(.processing)
         let mode = selectedMode
         let dictionary = dictionaryWords
@@ -270,7 +301,16 @@ final class AppState: ObservableObject {
                     return
                 }
                 let sttStarted = Date()
-                let raw = try await sttEngine.transcribe(fileURL: url)
+                // Prefer the live session's transcript (already computed while
+                // speaking); fall back to the file-based engine if it failed.
+                let raw: String
+                if useLive, let live = try? await liveTranscriber.finish(), !live.isEmpty {
+                    raw = live
+                    DebugLog.log("stt source: live")
+                } else {
+                    raw = try await sttEngine.transcribe(fileURL: url)
+                    DebugLog.log("stt source: file")
+                }
                 // Context was captured at recording START (what the user was looking
                 // at); only a mid-recording mode switch requires a fresh collect.
                 let context: DictationContext?
@@ -342,6 +382,9 @@ final class AppState: ObservableObject {
     func cancelRecording() {
         guard case .recording = phase else { return }
         recorder.cancel()
+        liveTranscriber.cancel()
+        liveActive = false
+        livePreview = ""
         pushToTalkActive = false
         setPhase(.idle)
     }
@@ -356,6 +399,7 @@ final class AppState: ObservableObject {
 
     private func deliver(raw: String, final: String, mode: Mode, duration: Double) {
         streamingPreview = ""
+        livePreview = ""
         let insertStarted = Date()
         let inserted = TextInserter.hasEditableFocus() && TextInserter.insert(final)
         DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
