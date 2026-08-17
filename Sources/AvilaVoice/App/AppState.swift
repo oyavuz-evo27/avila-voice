@@ -44,8 +44,34 @@ final class AppState: ObservableObject {
 
     private let recorder = AudioRecorder()
     private let hotkeys = HotkeyManager()
-    private let sttEngine: TranscriptionEngine = SpeechAnalyzerEngine()
-    private let llmEngine: EnhancementEngine = FoundationModelsEngine()
+
+    // Engines: Apple (system, zero download) and the optional quality tier.
+    let appleSTT = SpeechAnalyzerEngine()
+    let parakeetSTT = ParakeetEngine()
+    let appleLLM = FoundationModelsEngine()
+    let ollamaLLM = OllamaEngine()
+
+    /// Selected engines (persisted). Fall back to Apple when the optional model
+    /// is not installed, so a dictation never fails because of a settings choice.
+    @Published var sttChoice: String = UserDefaults.standard.string(forKey: "engine.stt") ?? "apple" {
+        didSet { UserDefaults.standard.set(sttChoice, forKey: "engine.stt") }
+    }
+    @Published var llmChoice: String = UserDefaults.standard.string(forKey: "engine.llm") ?? "apple" {
+        didSet {
+            UserDefaults.standard.set(llmChoice, forKey: "engine.llm")
+            let mode = selectedMode
+            Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+        }
+    }
+
+    var sttEngine: TranscriptionEngine {
+        sttChoice == "parakeet" && ParakeetEngine.isInstalled() ? parakeetSTT : appleSTT
+    }
+    var llmEngine: EnhancementEngine {
+        llmChoice == "ollama" ? ollamaLLM : appleLLM
+    }
+    /// The live (streaming) transcriber only exists for Apple's engine.
+    var liveTranscriptionAvailable: Bool { !(sttChoice == "parakeet" && ParakeetEngine.isInstalled()) }
 
     /// True while a push-to-talk hold is in progress (started on key down).
     private var pushToTalkActive = false
@@ -117,7 +143,8 @@ final class AppState: ObservableObject {
         hotkeys.onEscapeCancel = { [weak self] in self?.cancelRecording() }
         hotkeys.onStatusChange = { [weak self] active in self?.hotkeysActive = active }
         hotkeys.start()
-        Task.detached { [sttEngine] in await sttEngine.warmUp() }
+        Task.detached { [appleSTT] in await appleSTT.warmUp() }
+        if sttChoice == "parakeet" { Task.detached { [parakeetSTT] in await parakeetSTT.warmUp() } }
         let mode = selectedMode
         Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
     }
@@ -238,13 +265,15 @@ final class AppState: ObservableObject {
             // Live transcription: start the analyzer session first so even the
             // pre-roll buffers reach it. Failure is non-fatal (file STT fallback).
             let locale = Locale(identifier: UserDefaults.standard.string(forKey: "stt.locale") ?? "de-DE")
-            let transcriber = liveTranscriber
-            Task {
-                do {
-                    try await transcriber.start(locale: locale)
-                    await MainActor.run { self.liveActive = true }
-                } catch {
-                    DebugLog.log("live stt unavailable — file fallback: \(error.localizedDescription)")
+            if liveTranscriptionAvailable {
+                let transcriber = liveTranscriber
+                Task {
+                    do {
+                        try await transcriber.start(locale: locale)
+                        await MainActor.run { self.liveActive = true }
+                    } catch {
+                        DebugLog.log("live stt unavailable — file fallback: \(error.localizedDescription)")
+                    }
                 }
             }
             try recorder.start()

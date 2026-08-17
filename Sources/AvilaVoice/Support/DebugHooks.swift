@@ -26,6 +26,21 @@ enum DebugHooks {
                 await runRealDictationProbe()
             }
         }
+        // avila.debug.installParakeet — kick off the Parakeet download exactly as
+        // the Settings button would.
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("avila.debug.installParakeet"), object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in
+                DebugLog.log("debug: parakeet install requested")
+                do {
+                    try await AppState.shared.parakeetSTT.install()
+                    DebugLog.log("debug: parakeet install finished")
+                } catch {
+                    DebugLog.log("debug: parakeet install FAILED — \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     /// Same as the animation probe, but through the REAL pipeline — including the

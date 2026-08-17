@@ -69,6 +69,26 @@
 "Assumed typing speed" = "Assumed typing speed";
 "%d wpm" = "%d wpm";
 
+/* Models */
+"Models" = "Models";
+"Speech recognition" = "Speech recognition";
+"AI rewriting" = "AI rewriting";
+"Engine" = "Engine";
+"engine.apple.stt" = "Apple SpeechAnalyzer (built-in, no download)";
+"engine.parakeet" = "NVIDIA Parakeet v3 (quality tier)";
+"engine.parakeet.hint" = "Parakeet is markedly more accurate on spontaneous speech with fillers and very fast (Neural Engine). One-time download, fully offline afterwards.";
+"engine.apple.llm" = "Apple Foundation Models (built-in, no download)";
+"engine.ollama" = "Ollama — local model (quality tier)";
+"engine.ollama.hint" = "Uses a model installed in Ollama (e.g. Gemma 4 or Qwen). Runs entirely on this Mac; Ollama must be running. Recommended for German: gemma4:12b.";
+"engine.ollama.missing" = "Ollama is not running or has no models. Install: https://ollama.com — then e.g. “ollama pull gemma4:12b”.";
+"Model" = "Model";
+"error.ollamaUnavailable" = "Ollama is not reachable or the selected model is missing.";
+"models.privacy" = "All models run exclusively on this Mac. The only network access is the one-time download of model files (Parakeet from Hugging Face; Ollama models via Ollama).";
+"Installed" = "Installed";
+"Remove" = "Remove";
+"Download" = "Download";
+"error.modelMissing" = "The selected model is not installed.";
+
 /* Errors */
 "error.noSpeech" = "No speech was recognized.";
 "error.noMicrophone" = "No microphone available.";

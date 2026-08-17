@@ -10,10 +10,106 @@ struct SettingsView: View {
                 .tabItem { Label(L("Modes"), systemImage: "wand.and.stars") }
             DictionarySettings()
                 .tabItem { Label(L("Dictionary"), systemImage: "character.book.closed") }
+            ModelsSettings()
+                .tabItem { Label(L("Models"), systemImage: "cpu") }
             StatsSettings()
                 .tabItem { Label(L("Statistics"), systemImage: "chart.bar") }
         }
-        .frame(width: 560, height: 440)
+        .frame(width: 560, height: 460)
+    }
+}
+
+// MARK: - Models (engine choice + optional downloads)
+
+struct ModelsSettings: View {
+    @EnvironmentObject var state: AppState
+    @ObservedObject var store = ModelStore.shared
+    @State private var ollamaModels: [OllamaEngine.OllamaModel] = []
+    @State private var ollamaModel: String = UserDefaults.standard.string(forKey: "engine.ollama.model") ?? ""
+
+    var body: some View {
+        Form {
+            Section(L("Speech recognition")) {
+                Picker(L("Engine"), selection: $state.sttChoice) {
+                    Text(L("engine.apple.stt")).tag("apple")
+                    Text(L("engine.parakeet")).tag("parakeet")
+                        .disabled(!store.isInstalled(.parakeetV3))
+                }
+                .pickerStyle(.radioGroup)
+                modelRow(.parakeetV3) {
+                    Task { try? await state.parakeetSTT.install() }
+                }
+                Text(L("engine.parakeet.hint"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section(L("AI rewriting")) {
+                Picker(L("Engine"), selection: $state.llmChoice) {
+                    Text(L("engine.apple.llm")).tag("apple")
+                    Text(L("engine.ollama")).tag("ollama")
+                        .disabled(ollamaModels.isEmpty)
+                }
+                .pickerStyle(.radioGroup)
+                if ollamaModels.isEmpty {
+                    Text(L("engine.ollama.missing"))
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Picker(L("Model"), selection: $ollamaModel) {
+                        ForEach(ollamaModels) { model in
+                            Text("\(model.name) · \(String(format: "%.1f GB", model.sizeGB))")
+                                .tag(model.name)
+                        }
+                    }
+                    .onChange(of: ollamaModel) { _, name in
+                        UserDefaults.standard.set(name, forKey: "engine.ollama.model")
+                        let mode = state.selectedMode
+                        Task { await state.ollamaLLM.prewarm(mode: mode) }
+                    }
+                }
+                Text(L("engine.ollama.hint"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Text(L("models.privacy"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .task {
+            ollamaModels = await OllamaEngine.installedModels()
+            if ollamaModel.isEmpty, let first = ollamaModels.first {
+                ollamaModel = first.name
+                UserDefaults.standard.set(first.name, forKey: "engine.ollama.model")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modelRow(_ model: ModelDescriptor, install: @escaping () -> Void) -> some View {
+        LabeledContent("\(model.displayName) · \(model.sizeDescription)") {
+            HStack(spacing: 8) {
+                if let progress = store.progress[model.id] {
+                    ProgressView(value: progress)
+                        .frame(width: 120)
+                    Text("\(Int(progress * 100)) %")
+                        .font(.caption).monospacedDigit()
+                } else if store.isInstalled(model) {
+                    Label(L("Installed"), systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                    Button(L("Remove")) {
+                        store.remove(model)
+                        if model.kind == .speech, state.sttChoice == "parakeet" { state.sttChoice = "apple" }
+                    }
+                    .controlSize(.small)
+                } else {
+                    Button(L("Download")) { install() }
+                        .controlSize(.small)
+                }
+            }
+        }
+        if let error = store.errors[model.id] {
+            Text(error).font(.caption).foregroundStyle(.red)
+        }
     }
 }
 
