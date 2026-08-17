@@ -71,6 +71,9 @@ final class PillPanel: NSPanel {
     /// Bottom center of the active screen, above the Dock (visibleFrame).
     /// "Active" = the screen with the focused window (where dictated text will go);
     /// fallbacks: mouse screen, then main screen.
+    /// The screen the pill currently lives on; only a CHANGE of screen moves the pill.
+    private var currentScreenID: CGDirectDisplayID?
+
     func reposition() {
         guard let screen = Self.focusedWindowScreen()
             ?? NSScreen.screens.first(where: {
@@ -78,13 +81,25 @@ final class PillPanel: NSPanel {
             })
             ?? NSScreen.main else { return }
 
+        let screenID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
+            as? CGDirectDisplayID
+        // Same screen as before → never touch the position (no jitter, no drift
+        // from transient Dock/menu-bar geometry changes).
+        if screenID == currentScreenID, isVisible { return }
+        currentScreenID = screenID
+
         if frame.size != Self.panelSize {
             setContentSize(Self.panelSize)
         }
-        let origin = NSPoint(x: screen.visibleFrame.midX - Self.panelSize.width / 2,
+        // Horizontal center of the FULL screen (not visibleFrame — a left/right Dock
+        // or a hidden/shown Dock would shift visibleFrame.midX and make the pill
+        // slide sideways); vertical position respects the Dock.
+        let origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2,
                              y: screen.visibleFrame.minY + 6)
         if frame.origin != origin {
             setFrameOrigin(origin)
+            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f)",
+                                screenID.map(String.init) ?? "?", origin.x))
         }
         if !isVisible {
             orderFrontRegardless()
