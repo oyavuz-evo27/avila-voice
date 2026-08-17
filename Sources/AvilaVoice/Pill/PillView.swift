@@ -98,6 +98,10 @@ struct PillView: View {
                 if case .error(let message) = state.phase {
                     errorBubble(message)
                         .transition(.opacity)
+                } else if isProcessing, !state.streamingPreview.isEmpty {
+                    // Live LLM output: the wait no longer feels frozen.
+                    transcriptBubble(state.streamingPreview)
+                        .transition(.opacity)
                 } else if showTranscriptBubble, let last = state.history.last {
                     transcriptBubble(last.finalText)
                         .onHover { over in hoverBubble = over; updateVisibility() }

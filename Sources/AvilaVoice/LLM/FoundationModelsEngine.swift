@@ -35,6 +35,15 @@ actor FoundationModelsEngine: EnhancementEngine {
                  mode: Mode,
                  dictionary: [String],
                  context: DictationContext?) async throws -> String {
+        try await enhance(transcript: transcript, mode: mode, dictionary: dictionary,
+                          context: context, onPartial: { _ in })
+    }
+
+    func enhance(transcript: String,
+                 mode: Mode,
+                 dictionary: [String],
+                 context: DictationContext?,
+                 onPartial: @escaping @Sendable (String) -> Void) async throws -> String {
         guard SystemLanguageModel.default.availability == .available else {
             throw EnhancementError.engineUnavailable(L("error.appleIntelligence"))
         }
@@ -57,12 +66,18 @@ actor FoundationModelsEngine: EnhancementEngine {
         let prompt = PromptBuilder.userPrompt(transcript: transcript,
                                               dictionary: dictionary,
                                               context: context)
-        let response = try await session.respond(to: prompt)
+        // Stream so the pill can show progress while the model works (long
+        // dictations take 1–3 s on the system model).
+        var latest = ""
+        for try await snapshot in session.streamResponse(to: prompt) {
+            latest = snapshot.content
+            onPartial(latest)
+        }
 
         // Warm the next session for this mode in the background.
         Task { await self.prewarm(mode: mode) }
 
-        let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = latest.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? transcript : text
     }
 }

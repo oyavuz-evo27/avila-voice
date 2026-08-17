@@ -31,6 +31,8 @@ final class AppState: ObservableObject {
     @Published var pttBinding: HotkeyBinding?
     @Published var handsFreeBinding: HotkeyBinding?
     @Published var hotkeysActive = false
+    /// Growing LLM output while processing — shown in the pill's bubble.
+    @Published var streamingPreview: String = ""
 
     let history = HistoryStore()
     let stats = StatsStore()
@@ -239,6 +241,7 @@ final class AppState: ObservableObject {
             return
         }
         Sounds.playStop()
+        streamingPreview = ""
         setPhase(.processing)
         let mode = selectedMode
         let dictionary = dictionaryWords
@@ -291,9 +294,15 @@ final class AppState: ObservableObject {
                 if words >= 4, await llmEngine.isAvailable() {
                     let llmStarted = Date()
                     do {
-                        final = try await llmEngine.enhance(transcript: raw, mode: mode,
-                                                            dictionary: dictionary,
-                                                            context: context)
+                        final = try await llmEngine.enhance(
+                            transcript: raw, mode: mode, dictionary: dictionary,
+                            context: context,
+                            onPartial: { partial in
+                                Task { @MainActor in
+                                    guard self.pipelineGeneration == generation else { return }
+                                    self.streamingPreview = partial
+                                }
+                            })
                     } catch {
                         NSLog("AvilaVoice: enhancement failed, using raw transcript — \(error.localizedDescription)")
                     }
@@ -346,6 +355,7 @@ final class AppState: ObservableObject {
     }
 
     private func deliver(raw: String, final: String, mode: Mode, duration: Double) {
+        streamingPreview = ""
         let insertStarted = Date()
         let inserted = TextInserter.hasEditableFocus() && TextInserter.insert(final)
         DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
