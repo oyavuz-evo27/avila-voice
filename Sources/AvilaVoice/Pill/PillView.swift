@@ -492,7 +492,10 @@ struct PillView: View {
     /// more than the edges.
     private func updateBars(level: CGFloat) {
         for i in bars.indices {
-            let target = level * Self.barWeights[i] * CGFloat.random(in: 0.85...1.0)
+            // Boost quiet speech: sqrt lifts low levels so talking clearly separates
+            // from silence, while loud passages still cap at 1 (pill never grows).
+            let boosted = min(1, pow(level, 0.55) * 1.15)
+            let target = boosted * Self.barWeights[i] * CGFloat.random(in: 0.85...1.0)
             let current = bars[i]
             // Fast swell, slow decay — the Wispr-style breathing motion.
             let blend: CGFloat = target > current ? 0.35 : 0.12
@@ -506,7 +509,9 @@ struct PillView: View {
                 Capsule()
                     .fill(.white)
                     .frame(width: 2.5,
-                           height: max(2, bars[i] * 15))
+                           // Full use of the 20 pt inner height — the pill's size
+                           // is fixed, only the bars swing higher within it.
+                           height: max(2, bars[i] * 20))
             }
         }
         .animation(.easeOut(duration: 0.22), value: bars)
