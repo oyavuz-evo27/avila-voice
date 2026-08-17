@@ -174,3 +174,19 @@ unter „Lokal" ergänzen).
   genauso gut"); Wochenende: Installation auf privatem MacBook Air M1 nach README.
   Nächster großer Baustein auf Abruf: **Parakeet-v3-Engine** (Erkennungsqualität,
   Fall „Modell→Hotel"), danach MLX-LLM-Stufe (Qwen3.5-4B/Gemma 4).
+- **2026-08-17 — Qualitätsstufe gebaut (Onur: „beide einrichten").** Perf-Runde 2
+  (Messwerte der Testphase: LLM ~85 % der Latenz; Kontext = Kostentreiber →
+  Standard-Modus ohne Kontext, Budget gekürzt), Live-Transkription im Hintergrund
+  (LiveTranscriber, SpeechAnalyzer-Stream, volatile results; UI-Anzeige auf Onurs
+  Wunsch entfernt), lebendigere Waveform bei fixer Pillengröße, LLM-Ausgabe-Streaming
+  (unsichtbar). **Engines wählbar (Settings → Modelle):** STT Apple ↔ **Parakeet v3**
+  (FluidAudio, ~470 MB int8, ModelStore mit Fortschritt; Direktvergleich auf echter
+  32-s-Aufnahme: 166 ms vs. ~470 ms, besser bei Namen/Zeichensetzung, Apple teils
+  besser bei Satzstruktur) · LLM Apple ↔ **Ollama** (lokal, jedes installierte Modell,
+  Empfehlung gemma4:12b; getestet gemma4:12b + qwen3.6:27b: deutlich bessere
+  Bereinigung, kein Rollen-Ausbruch, ~4 s warm). **Wichtige Lehre:** eingebettetes MLX
+  scheitert ohne Xcode (SwiftPM kann Metal-Shader nicht kompilieren — offiziell
+  dokumentiert); Ollama war auf Onurs Mini ohnehin installiert (gemma4:12b/26b,
+  qwen3.6:27b, gemma3) → pragmatisch die bessere Wahl. RAM-Hinweis: Ollama-Modelle
+  belegen 8–17 GB — für den 8-GB-MacBook Air bleibt Apple der Standard.
+  Debug-Hook avila.debug.installParakeet. Alles gepusht; noch kein neuer Release-Tag.
