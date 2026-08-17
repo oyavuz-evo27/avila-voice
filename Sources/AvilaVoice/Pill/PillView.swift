@@ -409,6 +409,9 @@ struct PillView: View {
             }
         }
         .frame(width: size.width, height: size.height)
+        // The waveform fades out over 0.18 s while the capsule already contracts —
+        // clip to the ticked frame so bars can never poke out of the shrinking pill.
+        .clipShape(Capsule())
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -519,5 +522,10 @@ struct PillView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: bars)
+        // Bars collapse to a flat line the moment recording ends, so the fade-out
+        // shows a settling line — not tall bars sticking out of a shrinking pill.
+        .onChange(of: isRecording) { _, recording in
+            if !recording { bars = Array(repeating: 0, count: bars.count) }
+        }
     }
 }
