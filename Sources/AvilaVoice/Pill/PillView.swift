@@ -94,6 +94,8 @@ struct PillView: View {
             Spacer(minLength: 0)
 
             // Bubble zone above the row: error, transcript preview, or mode chips.
+            // Fixed full width so an appearing/disappearing bubble can never change
+            // the container's width — otherwise the centered pill slides sideways.
             ZStack {
                 if case .error(let message) = state.phase {
                     errorBubble(message)
@@ -108,6 +110,7 @@ struct PillView: View {
                         .transition(.opacity)
                 }
             }
+            .frame(maxWidth: .infinity)
 
             // The ZStack itself centers the pill — symmetric growth from the middle
             // is guaranteed by construction (Dynamic-Island style), the bottom edge
@@ -159,6 +162,7 @@ struct PillView: View {
                 // — an .animation(value:) modifier here would strip the phase-growth
                 // animation from the accessories.
             }
+            .frame(maxWidth: .infinity) // row is always full width → pill always dead center
         }
         .padding(.bottom, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

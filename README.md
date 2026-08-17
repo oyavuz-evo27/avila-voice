@@ -99,6 +99,32 @@ make run                 # builds build/AvilaVoice.app and launches it
   layout in this panel type.
 - Debug log: `~/Library/Logs/AvilaVoice.log`; last recording: `AvilaVoice-last.wav`.
 
+## Engines (Settings → Models)
+
+Avila Voice ships with Apple's on-device engines as the zero-download default and
+offers an optional **quality tier**:
+
+| Task | Default (built-in) | Quality tier (opt-in) |
+|---|---|---|
+| Speech recognition | Apple SpeechAnalyzer — live transcription, ~0 RAM | **NVIDIA Parakeet TDT 0.6B v3** (Core ML/ANE, ~0.5 GB one-time download): ~3× faster, stronger on names, technical terms and punctuation |
+| AI rewriting | Apple Foundation Models — ~0 RAM | **Ollama** with any installed local model, e.g. `gemma4:12b` (best German): markedly better clean-up, follows instructions more strictly |
+
+Ollama is optional: install it from [ollama.com](https://ollama.com), run
+`ollama pull gemma4:12b`, then pick "Ollama" in Settings → Models. Everything stays on
+your Mac — Avila Voice only talks to Ollama on `localhost:11434`.
+
+### Which engines for which Mac?
+
+| Mac | Speech recognition | AI rewriting |
+|---|---|---|
+| **8 GB Macs — e.g. MacBook Air M1/M2 with 8 GB** | Apple SpeechAnalyzer *(Parakeet works too, ~0.5 GB)* | **Apple Foundation Models only.** Do **not** use Ollama models on 8 GB: even the smallest useful ones need 8+ GB and push the machine into heavy swapping. |
+| 16 GB Macs | Parakeet v3 | Apple, or Ollama with a small model (`gemma4:e4b`, ~3 GB) |
+| 32 GB+ Macs — e.g. Mac mini M4 Pro | Parakeet v3 | Ollama with `gemma4:12b` |
+
+The Apple engines are the defaults precisely so a fresh install works on every
+supported Mac; the quality tier is chosen per machine. If a selected optional engine is
+unavailable (model missing, Ollama not running), the app falls back to Apple automatically.
+
 ## Troubleshooting
 
 | Symptom | Fix |
