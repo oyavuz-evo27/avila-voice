@@ -25,6 +25,18 @@ Echtes 9-s-Diktat: Apple inhaltlich richtig („was"), Parakeet 1 Wortfehler (�
 | gemma3:4b | 3,8 GB | 0,6–0,9 / 2,0 / 5,9 s | 55 | 17 (unbrauchbar) |
 | Apple Foundation Models | 0 | 0,6 / 1,3 / 4,9 s | – | 13,5 (Rollen-Ausbrüche, Zahlen 96→69, 2025→„25.000") |
 
+## Nachtrag 17.08. abends — MLX-Varianten der kleinen Modelle (Onurs echter 450-Zeichen-Text)
+
+| Modell | Generierung | Tok/s | Qualität |
+|---|---|---|---|
+| gemma4:26b-mlx | 2,5 s | 52 | sehr gut |
+| gemma4:12b-mlx | 4,0 s | 31 | gut („anlassen"→„anders sind") |
+| **gemma4:e4b-mlx** | **1,3 s** | **96** | sehr gut („Also"→„Auch") |
+
+→ **e4b-mlx ist der neue Standard auf dem Mini**: fast 2× schneller als 26b bei praktisch gleicher Qualität
+(Schwäche laut Haupt-Benchmark nur bei langen Texten mit Zahlwörtern). Prompt-Verarbeitung ist dank
+Ollama-Cache ~0 s; die Zeit ist reine Generierung → Tokens/s entscheiden. num_ctx hat keinen Effekt.
+
 ## Empfehlung
 
 - **Mac mini (48 GB):** STT **Parakeet v3** · LLM **gemma4:26b-mlx** (beste Qualität UND schnellstes brauchbares

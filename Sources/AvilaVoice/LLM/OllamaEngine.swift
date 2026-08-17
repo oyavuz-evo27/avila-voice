@@ -77,12 +77,15 @@ actor OllamaEngine: EnhancementEngine {
         let instructions = mode.systemPrompt + "\n\n" + PromptBuilder.policy
         let prompt = PromptBuilder.userPrompt(transcript: transcript,
                                               dictionary: dictionary, context: context)
+        // num_predict scaled to the input: rewriting never needs more than ~1.5× the
+        // transcript's tokens — a tight cap stops runaway generations early.
+        let cap = max(200, min(1600, transcript.count / 2))
         let body: [String: Any] = [
             "model": model,
             "stream": true,
-            "keep_alive": "30m",
+            "keep_alive": "60m",
             "think": false,          // Qwen3/Gemma reasoning off — rewriting wants speed
-            "options": ["temperature": 0.2, "num_predict": 1200],
+            "options": ["temperature": 0.1, "num_predict": cap, "top_k": 20],
             "messages": [
                 ["role": "system", "content": instructions],
                 ["role": "user", "content": prompt],

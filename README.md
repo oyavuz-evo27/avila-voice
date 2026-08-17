@@ -107,10 +107,10 @@ offers an optional **quality tier**:
 | Task | Default (built-in) | Quality tier (opt-in) |
 |---|---|---|
 | Speech recognition | Apple SpeechAnalyzer — live transcription, ~0 RAM | **NVIDIA Parakeet TDT 0.6B v3** (Core ML/ANE, ~0.5 GB one-time download): ~3× faster, stronger on names, technical terms and punctuation |
-| AI rewriting | Apple Foundation Models — ~0 RAM | **Ollama** with any installed local model, e.g. `gemma4:12b` (best German): markedly better clean-up, follows instructions more strictly |
+| AI rewriting | Apple Foundation Models — ~0 RAM | **Ollama** with any installed local model — recommended `gemma4:e4b-mlx` (~1.3 s for a 450-char dictation, 96 tok/s) or `gemma4:26b-mlx` (best quality): markedly better clean-up, follows instructions more strictly |
 
 Ollama is optional: install it from [ollama.com](https://ollama.com), run
-`ollama pull gemma4:12b`, then pick "Ollama" in Settings → Models. Everything stays on
+`ollama pull gemma4:e4b-mlx`, then pick "Ollama" in Settings → Models. Everything stays on
 your Mac — Avila Voice only talks to Ollama on `localhost:11434`.
 
 ### Which engines for which Mac?
@@ -118,8 +118,8 @@ your Mac — Avila Voice only talks to Ollama on `localhost:11434`.
 | Mac | Speech recognition | AI rewriting |
 |---|---|---|
 | **8 GB Macs — e.g. MacBook Air M1/M2 with 8 GB** | Apple SpeechAnalyzer *(Parakeet works too, ~0.5 GB)* | **Apple Foundation Models only.** Do **not** use Ollama models on 8 GB: even the smallest useful ones need 8+ GB and push the machine into heavy swapping. |
-| 16 GB Macs | Parakeet v3 | Apple, or Ollama with a small model (`gemma4:e4b`, ~3 GB) |
-| 32 GB+ Macs — e.g. Mac mini M4 Pro | Parakeet v3 | Ollama with `gemma4:12b` |
+| 16 GB Macs | Parakeet v3 | Ollama with `gemma4:e4b-mlx` (~9 GB) — or Apple |
+| 32 GB+ Macs — e.g. Mac mini M4 Pro | Parakeet v3 | Ollama with `gemma4:e4b-mlx` (fastest) or `gemma4:26b-mlx` (best) |
 
 The Apple engines are the defaults precisely so a fresh install works on every
 supported Mac; the quality tier is chosen per machine. If a selected optional engine is
