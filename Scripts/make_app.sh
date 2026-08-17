@@ -15,11 +15,13 @@ cp "$BIN" "$APP/Contents/MacOS/AvilaVoice"
 if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
     cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 fi
-# SwiftPM resource bundle (menu bar icon, Localizable.strings)
-BUNDLE="$ROOT/.build/release/AvilaVoice_AvilaVoice.bundle"
-if [ -d "$BUNDLE" ]; then
-    cp -R "$BUNDLE" "$APP/Contents/Resources/"
-fi
+# SwiftPM resource bundles (own: menu bar icon, Localizable.strings; dependencies:
+# FluidAudio's Hub/Crypto bundles for the Parakeet model download)
+for BUNDLE in "$ROOT"/.build/release/*.bundle; do
+    if [ -d "$BUNDLE" ]; then
+        cp -R "$BUNDLE" "$APP/Contents/Resources/"
+    fi
+done
 
 # Localized permission dialogs (InfoPlist.strings)
 for lproj in "$ROOT"/Resources/*.lproj; do

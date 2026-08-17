@@ -190,3 +190,15 @@ unter „Lokal" ergänzen).
   qwen3.6:27b, gemma3) → pragmatisch die bessere Wahl. RAM-Hinweis: Ollama-Modelle
   belegen 8–17 GB — für den 8-GB-MacBook Air bleibt Apple der Standard.
   Debug-Hook avila.debug.installParakeet. Alles gepusht; noch kein neuer Release-Tag.
+- **2026-08-17 (Abend) — v0.2.0 veröffentlicht.** Benchmark-Agent (docs/BENCHMARK-2026-08.md):
+  STT Parakeet 88 ms/7,5 % WER vs. Apple 124 ms/11,9 %; LLM gemma4 (12b/26b-mlx) 40/40
+  Qualität, Apple FM 13,5/40 (Rollen-Ausbrüche, Zahlenfehler). Nachmessung auf Onurs
+  echtem Text: **gemma4:e4b-mlx** 1,3 s / 96 t/s bei fast gleicher Qualität → neuer
+  Standard auf dem Mini (26b-mlx 2,5 s als Qualitäts-Option). Erkenntnis: Zeit ist reine
+  Generierung (Prompt-Cache 0 s), num_ctx wirkungslos → Tokens/s entscheiden. Wörterbuch
+  mit Onurs Fachbegriffen vorbelegt. Bugs: Waveform ragte beim Schrumpfen heraus
+  (Clip auf getickte Kapsel + Balken-Kollaps beim Stopp); Pille rutschte seitlich
+  (Ursache: Zentrierung auf visibleFrame.midX + 1-s-Follow-Tick → jetzt screen.frame.midX
+  und Neupositionierung NUR bei echtem Bildschirmwechsel, geloggt). make_app.sh kopiert
+  jetzt alle SwiftPM-Bundles (Hub/Crypto für Parakeet-Download). Onur: „deutlich besser,
+  Pille bewegt sich nicht" → Release für MacBook-Installation.
