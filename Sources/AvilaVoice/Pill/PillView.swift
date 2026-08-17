@@ -98,19 +98,6 @@ struct PillView: View {
                 if case .error(let message) = state.phase {
                     errorBubble(message)
                         .transition(.opacity)
-                } else if isRecording, !state.livePreview.isEmpty {
-                    // Live transcript while speaking.
-                    transcriptBubble(state.livePreview)
-                        .transition(.opacity)
-                } else if isProcessing {
-                    // Processing: keep showing the transcript, then the growing LLM
-                    // output — the wait never feels frozen.
-                    let text = state.streamingPreview.isEmpty ? state.livePreview
-                                                              : state.streamingPreview
-                    if !text.isEmpty {
-                        transcriptBubble(text)
-                            .transition(.opacity)
-                    }
                 } else if showTranscriptBubble, let last = state.history.last {
                     transcriptBubble(last.finalText)
                         .onHover { over in hoverBubble = over; updateVisibility() }
