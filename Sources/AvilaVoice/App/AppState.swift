@@ -447,8 +447,9 @@ final class AppState: ObservableObject {
                                     modeName: mode.displayName, wasInserted: inserted,
                                     durationSeconds: duration))
         setPhase(.result(inserted: inserted))
-        // Return to idle after a grace period (pill hover keeps the text reachable).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+        // Brief confirmation, then back to idle (the copy circle keeps the text
+        // reachable at any time).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             if case .result = self?.phase { self?.setPhase(.idle) }
         }
     }
