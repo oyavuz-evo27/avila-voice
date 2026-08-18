@@ -1,10 +1,10 @@
 import Foundation
 
-enum TranscriptionError: Error, LocalizedError {
+public enum TranscriptionError: Error, LocalizedError {
     case engineUnavailable(String)
     case emptyResult
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .engineUnavailable(let reason): return reason
         case .emptyResult: return L("error.noSpeech")
@@ -13,7 +13,7 @@ enum TranscriptionError: Error, LocalizedError {
 }
 
 /// A speech-to-text backend. Implementations: Apple SpeechAnalyzer, NVIDIA Parakeet v3.
-protocol TranscriptionEngine: Sendable {
+public protocol TranscriptionEngine: Sendable {
     var displayName: String { get }
     /// Prepare models so the first dictation has no cold start. Safe to call repeatedly.
     func warmUp() async

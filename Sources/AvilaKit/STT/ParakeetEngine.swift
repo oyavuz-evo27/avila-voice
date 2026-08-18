@@ -5,27 +5,28 @@ import Foundation
 /// NVIDIA Parakeet TDT 0.6B v3 via FluidAudio (Core ML, Apple Neural Engine).
 /// 25 languages incl. German; strongest on spontaneous speech with fillers.
 /// Models are downloaded once (~1.2 GB) into the app's model directory.
-actor ParakeetEngine: TranscriptionEngine {
-    nonisolated let displayName = "NVIDIA Parakeet v3"
+public actor ParakeetEngine: TranscriptionEngine {
+    public init() {}
+    public nonisolated let displayName = "NVIDIA Parakeet v3"
 
     private var manager: AsrManager?
     private var loading: Task<Void, Error>?
 
     /// True once the model files are present on disk (no network needed).
-    static func isInstalled() -> Bool {
+    public static func isInstalled() -> Bool {
         AsrModels.modelsExist(at: modelDirectory)
     }
 
-    static var modelDirectory: URL {
+    public static var modelDirectory: URL {
         ModelStore.root.appendingPathComponent(ModelDescriptor.parakeetV3.id, isDirectory: true)
     }
 
-    func warmUp() async {
+    public func warmUp() async {
         try? await ensureLoaded(allowDownload: false)
     }
 
     /// Downloads (if needed) and loads the models, reporting progress to the store.
-    func install() async throws {
+    public func install() async throws {
         try await ensureLoaded(allowDownload: true)
     }
 
@@ -65,7 +66,7 @@ actor ParakeetEngine: TranscriptionEngine {
         }
     }
 
-    func transcribe(fileURL: URL) async throws -> String {
+    public func transcribe(fileURL: URL) async throws -> String {
         try await ensureLoaded(allowDownload: false)
         guard let manager else { throw TranscriptionError.engineUnavailable(L("error.modelMissing")) }
 

@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import SwiftUI
+import AvilaKit
 
 /// Borderless, non-activating floating panel that hosts the pill at the bottom center
 /// of the screen the mouse is on. Never steals focus from the app the user is dictating

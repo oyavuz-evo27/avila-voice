@@ -1,0 +1,10 @@
+/* AvilaKit — Strings innerhalb des gemeinsamen Pakets (Teilmenge der App-Strings) */
+"Right ⌘" = "Rechte ⌘";
+"Right ⌥" = "Rechte ⌥";
+"Right ⇧" = "Rechte ⇧";
+"Right ⌃" = "Rechte ⌃";
+"Key %d" = "Taste %d";
+"error.noMicrophone" = "Kein Mikrofon verfügbar.";
+"error.noSpeech" = "Es wurde keine Sprache erkannt.";
+"error.sttLocale" = "SpeechAnalyzer unterstützt diese Sprache nicht.";
+"error.modelMissing" = "Das gewählte Modell ist nicht installiert.";

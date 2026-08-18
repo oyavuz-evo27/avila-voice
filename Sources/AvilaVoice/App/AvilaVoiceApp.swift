@@ -3,6 +3,7 @@ import AVFoundation
 import IOKit.hid
 import ServiceManagement
 import SwiftUI
+import AvilaKit
 
 @main
 struct AvilaVoiceApp: App {

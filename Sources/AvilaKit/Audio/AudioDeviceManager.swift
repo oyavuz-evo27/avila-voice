@@ -1,16 +1,16 @@
 import CoreAudio
 import Foundation
 
-struct AudioInputDevice: Identifiable, Equatable, Sendable {
-    let id: UInt32          // AudioDeviceID
-    let uid: String
-    let name: String
+public struct AudioInputDevice: Identifiable, Equatable, Sendable {
+    public let id: UInt32          // AudioDeviceID
+    public let uid: String
+    public let name: String
 }
 
 /// Enumerates input-capable audio devices via Core Audio.
-enum AudioDeviceManager {
+public enum AudioDeviceManager {
 
-    static func inputDevices() -> [AudioInputDevice] {
+    public static func inputDevices() -> [AudioInputDevice] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -31,15 +31,15 @@ enum AudioDeviceManager {
         }
     }
 
-    static func deviceID(forUID uid: String) -> AudioDeviceID? {
+    public static func deviceID(forUID uid: String) -> AudioDeviceID? {
         inputDevices().first { $0.uid == uid }.map { AudioDeviceID($0.id) }
     }
 
-    static func deviceName(_ id: AudioDeviceID) -> String? {
+    public static func deviceName(_ id: AudioDeviceID) -> String? {
         stringProperty(id, kAudioObjectPropertyName)
     }
 
-    static func defaultInputDeviceID() -> AudioDeviceID? {
+    public static func defaultInputDeviceID() -> AudioDeviceID? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -53,7 +53,7 @@ enum AudioDeviceManager {
     }
 
     @discardableResult
-    static func setDefaultInputDevice(_ id: AudioDeviceID) -> Bool {
+    public static func setDefaultInputDevice(_ id: AudioDeviceID) -> Bool {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,

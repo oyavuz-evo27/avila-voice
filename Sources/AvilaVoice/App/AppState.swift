@@ -2,6 +2,7 @@ import AppKit
 import AVFAudio
 import Combine
 import SwiftUI
+import AvilaKit
 
 enum DictationPhase: Equatable {
     case idle

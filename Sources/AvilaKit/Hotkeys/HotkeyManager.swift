@@ -3,17 +3,17 @@ import Carbon.HIToolbox
 
 /// A trigger the user can bind: a modifier key (optionally combined with further
 /// held modifiers, e.g. Fn+⌘), a regular key (with modifiers), or an extra mouse button.
-enum HotkeyBinding: Equatable {
+public enum HotkeyBinding: Equatable, Sendable {
     /// `extraFlags`: generic CGEventFlags that must additionally be held (0 = none).
     case modifierKey(keyCode: Int64, extraFlags: UInt64 = 0)
     case key(keyCode: Int64, modifiers: UInt64)
     case mouseButton(number: Int64)           // button 3, 4, 5 … (MX Master side buttons)
 
-    static let defaultPushToTalk = HotkeyBinding.modifierKey(keyCode: 54)  // right ⌘
-    static let defaultHandsFree = HotkeyBinding.modifierKey(keyCode: 61)   // right ⌥
+    public static let defaultPushToTalk = HotkeyBinding.modifierKey(keyCode: 54)  // right ⌘
+    public static let defaultHandsFree = HotkeyBinding.modifierKey(keyCode: 61)   // right ⌥
 
     /// Every component is joined with " + " (e.g. "⌥ + K", "Fn + Rechte ⌘").
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .modifierKey(let code, let extra):
             let name = Self.modifierNames[code].map { L($0) } ?? LF("Key %d", Int(code))
@@ -38,13 +38,13 @@ enum HotkeyBinding: Equatable {
         return parts
     }
 
-    static let modifierNames: [Int64: String] = [
+    public static let modifierNames: [Int64: String] = [
         54: "Right ⌘", 55: "⌘", 56: "⇧", 57: "⇪", 58: "⌥",
         59: "⌃", 60: "Right ⇧", 61: "Right ⌥", 62: "Right ⌃", 63: "Fn",
     ]
 
     /// The device-independent flag a modifier key code controls.
-    static func modifierMask(for keyCode: Int64) -> CGEventFlags? {
+    public static func modifierMask(for keyCode: Int64) -> CGEventFlags? {
         switch keyCode {
         case 54, 55: return .maskCommand
         case 56, 60: return .maskShift
@@ -58,7 +58,7 @@ enum HotkeyBinding: Equatable {
 
     /// The device-specific flag bit for a modifier key code (distinguishes left/right),
     /// so releasing right ⌘ is not confused with left ⌘ still being held.
-    static func deviceMask(for keyCode: Int64) -> UInt64? {
+    public static func deviceMask(for keyCode: Int64) -> UInt64? {
         switch keyCode {
         case 59: return 0x0001      // left Control
         case 56: return 0x0002      // left Shift
@@ -73,7 +73,7 @@ enum HotkeyBinding: Equatable {
     }
 
     /// Whether the modifier belonging to `keyCode` is currently pressed in `flags`.
-    static func modifierIsDown(keyCode: Int64, flags: CGEventFlags) -> Bool {
+    public static func modifierIsDown(keyCode: Int64, flags: CGEventFlags) -> Bool {
         if let device = deviceMask(for: keyCode) {
             return flags.rawValue & device != 0
         }
@@ -91,7 +91,7 @@ enum HotkeyBinding: Equatable {
     private enum KeyKeys: String, CodingKey { case keyCode, modifiers }
     private enum MouseKeys: String, CodingKey { case number }
 
-    static let keyNames: [Int64: String] = [
+    public static let keyNames: [Int64: String] = [
         0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X", 8: "C", 9: "V",
         11: "B", 12: "Q", 13: "W", 14: "E", 15: "R", 16: "Y", 17: "T", 18: "1", 19: "2",
         20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8",
@@ -106,7 +106,7 @@ enum HotkeyBinding: Equatable {
 }
 
 extension HotkeyBinding: Codable {
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CaseKeys.self)
         if c.contains(.modifierKey) {
             let sub = try c.nestedContainer(keyedBy: ModKeys.self, forKey: .modifierKey)
@@ -126,7 +126,7 @@ extension HotkeyBinding: Codable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CaseKeys.self)
         switch self {
         case .modifierKey(let keyCode, let extraFlags):
@@ -144,7 +144,7 @@ extension HotkeyBinding: Codable {
     }
 }
 
-enum HotkeyRole: String {
+public enum HotkeyRole: String {
     case pushToTalk
     case handsFree
 }
@@ -154,25 +154,25 @@ enum HotkeyRole: String {
 /// Also provides a capture mode for the settings hotkey recorder.
 /// Needs Input Monitoring / Accessibility permission — creation is retried until the
 /// user has granted it, so no app restart is required after granting.
-final class HotkeyManager: NSObject, @unchecked Sendable {
+public final class HotkeyManager: NSObject, @unchecked Sendable {
     /// Below this press duration (seconds) a press counts as a tap.
-    static let tapThreshold: TimeInterval = 0.35
+    public static let tapThreshold: TimeInterval = 0.35
 
-    var pttBinding: HotkeyBinding?
-    var handsFreeBinding: HotkeyBinding?
+    public var pttBinding: HotkeyBinding?
+    public var handsFreeBinding: HotkeyBinding?
 
     /// True while the event tap is installed and listening.
     private(set) var isActive = false
-    var onStatusChange: (@MainActor @Sendable (Bool) -> Void)?
+    public var onStatusChange: (@MainActor @Sendable (Bool) -> Void)?
 
     /// Callbacks arrive on the main thread.
-    var onPTTDown: (@MainActor @Sendable () -> Void)?
-    var onPTTUp: (@MainActor @Sendable (_ heldFor: TimeInterval) -> Void)?
-    var onHandsFreeToggle: (@MainActor @Sendable () -> Void)?
+    public var onPTTDown: (@MainActor @Sendable () -> Void)?
+    public var onPTTUp: (@MainActor @Sendable (_ heldFor: TimeInterval) -> Void)?
+    public var onHandsFreeToggle: (@MainActor @Sendable () -> Void)?
     /// Esc pressed while a recording is active — cancel without transcribing.
-    var onEscapeCancel: (@MainActor @Sendable () -> Void)?
+    public var onEscapeCancel: (@MainActor @Sendable () -> Void)?
     /// Kept in sync by AppState; read on the event-tap thread.
-    var recordingActive = false
+    public var recordingActive = false
 
     private var captureHandler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?
     /// Modifier keys currently held during capture, in press order — a combo like
@@ -187,7 +187,7 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
 
     /// Arms the capture mode (nil disarms). A previously armed handler is completed
     /// with nil so its UI can reset — no capture is ever left dangling.
-    func setCaptureHandler(_ handler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?) {
+    public func setCaptureHandler(_ handler: (@MainActor @Sendable (HotkeyBinding?) -> Void)?) {
         let old = captureHandler
         captureHandler = handler
         captureHeldModifiers = []
@@ -196,7 +196,7 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
         }
     }
 
-    func start() {
+    public func start() {
         createTap()
         if tap == nil {
             NSLog("AvilaVoice: event tap unavailable — waiting for Accessibility/Input Monitoring permission")
@@ -251,7 +251,7 @@ final class HotkeyManager: NSObject, @unchecked Sendable {
         setActive(true)
     }
 
-    func stop() {
+    public func stop() {
         retryTimer?.invalidate()
         retryTimer = nil
         if let tap { CGEvent.tapEnable(tap: tap, enable: false) }

@@ -4,6 +4,7 @@ import Foundation
 import ImageIO
 import ScreenCaptureKit
 import UniformTypeIdentifiers
+import AvilaKit
 
 /// Development-only instrumentation, triggered via distributed notifications:
 ///   avila.debug.animate — fakes an idle→recording→idle phase flip while capturing

@@ -6,7 +6,8 @@ import AVFAudio
 /// Volatile results are published live for the pill; on stop the analyzer is
 /// finalized and the finished transcript returned — the file-based STT is then
 /// unnecessary (fallback only if the live session fails).
-final class LiveTranscriber: @unchecked Sendable {
+public final class LiveTranscriber: @unchecked Sendable {
+    public init() {}
     private var analyzer: SpeechAnalyzer?
     private var transcriber: SpeechTranscriber?
     private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
@@ -18,10 +19,10 @@ final class LiveTranscriber: @unchecked Sendable {
     private let lock = NSLock()
 
     /// Called on an arbitrary thread with (finalized + volatile) text.
-    var onPartial: (@Sendable (String) -> Void)?
+    public var onPartial: (@Sendable (String) -> Void)?
 
     /// Starts an analysis session for `locale`. Throws if the locale is unsupported.
-    func start(locale: Locale) async throws {
+    public func start(locale: Locale) async throws {
         let transcriber = SpeechTranscriber(locale: locale,
                                             transcriptionOptions: [],
                                             reportingOptions: [.volatileResults],
@@ -65,7 +66,7 @@ final class LiveTranscriber: @unchecked Sendable {
     }
 
     /// Feed a captured buffer (any format — converted to the analyzer's format).
-    func append(_ buffer: AVAudioPCMBuffer) {
+    public func append(_ buffer: AVAudioPCMBuffer) {
         guard let continuation = inputContinuation, let target = analyzerFormat else { return }
         let converted: AVAudioPCMBuffer
         if buffer.format == target {
@@ -92,7 +93,7 @@ final class LiveTranscriber: @unchecked Sendable {
     }
 
     /// Finishes the session and returns the complete transcript.
-    func finish() async throws -> String {
+    public func finish() async throws -> String {
         inputContinuation?.finish()
         inputContinuation = nil
         if let analyzer {
@@ -108,7 +109,7 @@ final class LiveTranscriber: @unchecked Sendable {
         return text
     }
 
-    func cancel() {
+    public func cancel() {
         inputContinuation?.finish()
         inputContinuation = nil
         let analyzer = self.analyzer

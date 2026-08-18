@@ -1,5 +1,6 @@
 import ServiceManagement
 import SwiftUI
+import AvilaKit
 
 struct SettingsView: View {
     var body: some View {

@@ -2,10 +2,10 @@ import AVFoundation
 import CoreMedia
 import Foundation
 
-enum RecorderError: Error, LocalizedError {
+public enum RecorderError: Error, LocalizedError {
     case noInputDevice
 
-    var errorDescription: String? { L("error.noMicrophone") }
+    public var errorDescription: String? { L("error.noMicrophone") }
 }
 
 /// Captures microphone audio with AVCaptureSession — first-class device selection.
@@ -13,7 +13,7 @@ enum RecorderError: Error, LocalizedError {
 /// success on aggregate devices and then never delivers a single buffer.)
 /// Publishes the input level for the waveform and writes a 16 kHz mono WAV for
 /// the STT engines.
-final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
+public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private var session: AVCaptureSession?
     /// Device the warm session was built for ("" = system default).
     private var sessionDeviceUID: String?
@@ -26,11 +26,11 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     /// starts speaking at (or slightly before) the hotkey press. captureQueue only.
     private var preRoll: [AVAudioPCMBuffer] = []
     private var preRollSeconds: Double = 0
-    static let preRollWindow: Double = 0.6
+    public static let preRollWindow: Double = 0.6
     /// How long the capture session stays warm after a dictation. Trade-off: the
     /// macOS microphone indicator stays on during this window, but the next
     /// dictation starts instantly and loses no word onsets to startRunning.
-    static let warmWindow: TimeInterval = 25
+    public static let warmWindow: TimeInterval = 25
     private var file: AVAudioFile?
     private var converter: AVAudioConverter?
     private var startedAt: Date?
@@ -44,16 +44,16 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     private let captureQueue = DispatchQueue(label: "avila.audio.capture")
 
     /// Called on an audio thread with the current input level (0…1).
-    var onLevel: (@Sendable (Float) -> Void)?
+    public var onLevel: (@Sendable (Float) -> Void)?
     /// Called on the capture queue with every recorded buffer (incl. pre-roll) —
     /// feeds the live transcriber.
-    var onBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
+    public var onBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
     /// Fired when capture is genuinely lost (device gone, rebuild failed).
-    var onConfigurationChange: (@Sendable () -> Void)?
+    public var onConfigurationChange: (@Sendable () -> Void)?
 
     private(set) var currentFileURL: URL?
 
-    static let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+    public static let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
                                             sampleRate: 16_000,
                                             channels: 1,
                                             interleaved: false)!
@@ -82,7 +82,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
 
     // MARK: - Lifecycle
 
-    func start() throws {
+    public func start() throws {
         if isWriting { _ = stop() }
         idleTimer?.invalidate()
         idleTimer = nil
@@ -164,7 +164,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
     /// Stops the recording and returns (file, duration in seconds).
     /// The capture session stays WARM for `warmWindow` seconds — the next dictation
     /// then starts instantly and loses no word onsets to startRunning.
-    func stop() -> (url: URL, duration: Double)? {
+    public func stop() -> (url: URL, duration: Double)? {
         stallTimer?.invalidate()
         stallTimer = nil
         isWriting = false
@@ -183,7 +183,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         return (url, duration)
     }
 
-    func cancel() {
+    public func cancel() {
         if let (url, _) = stop() {
             try? FileManager.default.removeItem(at: url)
         }
@@ -245,7 +245,7 @@ final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
 
     // MARK: - Sample delivery
 
-    func captureOutput(_ output: AVCaptureOutput,
+    public func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
         guard let buffer = Self.pcmBuffer(from: sampleBuffer) else { return }
