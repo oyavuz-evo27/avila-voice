@@ -212,3 +212,13 @@ unter „Lokal" ergänzen).
   und Neupositionierung NUR bei echtem Bildschirmwechsel, geloggt). make_app.sh kopiert
   jetzt alle SwiftPM-Bundles (Hub/Crypto für Parakeet-Download). Onur: „deutlich besser,
   Pille bewegt sich nicht" → Release für MacBook-Installation.
+- **2026-08-18 — Feinschliff nach Testphase.** Stopp-Feedback sofort (Phase vor Recorder-
+  Teardown), Häkchen 2 s. Pillen-Positionsregel final (Mauszeiger-Bildschirm, 1-s-Debounce,
+  nie während Aufnahme; siehe ⛔-Abschnitt). Wettbewerbsanalyse (7 Apps) →
+  docs/IDEAS-BACKLOG.md; Onur wählte nur Zahlen-Normalisierung + Markier-Kontext:
+  Policy formatiert Zahlen/Daten/Währung deutsch (12.500,80 €, 96 %, KW 34, verifiziert),
+  markierter Text wird als „worüber der Nutzer redet" mit 1.200-Zeichen-Budget übergeben
+  (Standard-Modus: nur Auswahl-Kontext an). **Perf-Fund:** Ollama-Prompt-Cache verfiel nach
+  Pausen → 2–3 s Prefill-Strafe (40 Zeichen = 3,3 s). Fix: Policy auf ~140 Tokens gekürzt +
+  Cache-Priming-Loop alle 4 min mit exaktem System-Prompt. Kalt 3,1 → 1,0 s, warm 0,3–0,7 s.
+  Onur testet weiter; v0.2.1-Tag steht aus.
