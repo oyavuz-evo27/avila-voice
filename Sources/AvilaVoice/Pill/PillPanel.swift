@@ -10,7 +10,6 @@ final class PillPanel: NSPanel {
     static let shared = PillPanel()
     static let panelSize = NSSize(width: 380, height: 240)
 
-    private var followTimer: Timer?
 
     private init() {
         super.init(contentRect: NSRect(origin: .zero, size: Self.panelSize),
@@ -35,35 +34,12 @@ final class PillPanel: NSPanel {
         reposition(force: true)
         orderFrontRegardless()
 
-        // Follow the screen the mouse is on (multi-monitor, like Wispr Flow).
-        followTimer?.invalidate()
-        let timer = Timer(timeInterval: 1.0, target: self,
-                          selector: #selector(followTick), userInfo: nil, repeats: true)
-        RunLoop.main.add(timer, forMode: .common)
-        followTimer = timer
-
+        // FIXED POSITION BY DECISION (Onur, 18.08.2026): the pill never follows the
+        // mouse, the focused window, or the recording start. It stays where it is;
+        // only a physical display-configuration change re-places it.
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        // Jump to the monitor of the newly focused app (⌘-Tab, clicking a window).
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self, selector: #selector(appActivated),
-            name: NSWorkspace.didActivateApplicationNotification, object: nil)
-    }
-
-    @objc private func appActivated() {
-        // Give the focused window a moment to settle, then follow it.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.followTick()
-        }
-    }
-
-    @objc private func followTick() {
-        // Never jump between screens mid-dictation — the pill stays put until idle.
-        switch AppState.shared.phase {
-        case .recording, .processing: return
-        default: reposition()
-        }
     }
 
     @objc private func screensChanged() { reposition(force: true) }
@@ -80,8 +56,9 @@ final class PillPanel: NSPanel {
     static let migrateAfter: TimeInterval = 1.5
 
     func reposition(force: Bool = false) {
-        guard let screen = Self.focusedWindowScreen()
-            ?? NSScreen.screens.first(where: {
+        // Placement screen: the one the mouse is on at app start (or after a display
+        // change) — no window-focus tracking, no mid-session moves.
+        guard let screen = NSScreen.screens.first(where: {
                 NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
             })
             ?? NSScreen.main else { return }

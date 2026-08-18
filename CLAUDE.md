@@ -58,6 +58,14 @@ Minimum-Deployment-Target: **macOS 26**.
   **STT-Sprach-Auto-Erkennung** (aktuell fester Sprachschalter in den Einstellungen —
   Auto-Erkennung DE/EN ist geplant, Hinweis dazu steht im Settings-UI).
 
+## ⛔ Pille — eingefroren (Onur, 18.08.2026)
+Design, Größe, Animation und **Position** der Pille sind final und dürfen **nicht** mehr
+angefasst werden — außer Onur spricht es ausdrücklich an. Insbesondere: keine
+Positions-Verfolgung (Maus, Fokus, Aufnahmestart); die Pille bleibt auf ihrem Bildschirm,
+nur ein physischer Display-Wechsel platziert sie neu. Hintergrund: Mehrere gut gemeinte
+„Verbesserungen" (Bildschirm-Folgen, visibleFrame-Zentrierung, Layout-Umbauten) hatten
+jeweils neues Wandern/Rutschen verursacht.
+
 ## Veröffentlichung
 - GitHub: öffentliches Repo `avila-voice` unter Account `oyavuz-evo27` (gh-CLI angemeldet)
 - Lizenz: MIT · Releases: GitHub Actions baut unsignierte `.app` als Download

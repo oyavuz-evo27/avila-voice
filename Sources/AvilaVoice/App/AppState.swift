@@ -258,7 +258,6 @@ final class AppState: ObservableObject {
         // Never start while recording or while a pipeline is still delivering —
         // a second recorder start would corrupt state (and leak the audio tap).
         guard phase != .recording, phase != .processing else { return }
-        PillPanel.shared.reposition(force: true) // jump to the screen the user is working on
         do {
             livePreview = ""
             liveActive = false
