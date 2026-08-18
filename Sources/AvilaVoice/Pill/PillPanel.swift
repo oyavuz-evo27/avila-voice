@@ -32,7 +32,7 @@ final class PillPanel: NSPanel {
     }
 
     func show() {
-        reposition()
+        reposition(force: true)
         orderFrontRegardless()
 
         // Follow the screen the mouse is on (multi-monitor, like Wispr Flow).
@@ -66,15 +66,20 @@ final class PillPanel: NSPanel {
         }
     }
 
-    @objc private func screensChanged() { reposition() }
+    @objc private func screensChanged() { reposition(force: true) }
 
     /// Bottom center of the active screen, above the Dock (visibleFrame).
     /// "Active" = the screen with the focused window (where dictated text will go);
     /// fallbacks: mouse screen, then main screen.
     /// The screen the pill currently lives on; only a CHANGE of screen moves the pill.
     private var currentScreenID: CGDirectDisplayID?
+    /// Candidate target screen and since when it has been the target — the pill
+    /// only migrates once a new screen has been the focus target for a while.
+    private var candidateScreenID: CGDirectDisplayID?
+    private var candidateSince: Date?
+    static let migrateAfter: TimeInterval = 1.5
 
-    func reposition() {
+    func reposition(force: Bool = false) {
         guard let screen = Self.focusedWindowScreen()
             ?? NSScreen.screens.first(where: {
                 NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
@@ -85,7 +90,25 @@ final class PillPanel: NSPanel {
             as? CGDirectDisplayID
         // Same screen as before → never touch the position (no jitter, no drift
         // from transient Dock/menu-bar geometry changes).
-        if screenID == currentScreenID, isVisible { return }
+        if screenID == currentScreenID, isVisible {
+            candidateScreenID = nil
+            candidateSince = nil
+            return
+        }
+        // Debounce screen changes: focus flickers between windows on different
+        // monitors (⌘-Tab, dialogs, the target app activating) made the pill
+        // ping-pong. Require the new target to be stable for `migrateAfter`.
+        if !force, isVisible {
+            if candidateScreenID != screenID {
+                candidateScreenID = screenID
+                candidateSince = Date()
+                return
+            }
+            guard let since = candidateSince,
+                  Date().timeIntervalSince(since) >= Self.migrateAfter else { return }
+        }
+        candidateScreenID = nil
+        candidateSince = nil
         currentScreenID = screenID
 
         if frame.size != Self.panelSize {

@@ -258,7 +258,7 @@ final class AppState: ObservableObject {
         // Never start while recording or while a pipeline is still delivering —
         // a second recorder start would corrupt state (and leak the audio tap).
         guard phase != .recording, phase != .processing else { return }
-        PillPanel.shared.reposition() // jump to the screen the user is working on
+        PillPanel.shared.reposition(force: true) // jump to the screen the user is working on
         do {
             livePreview = ""
             liveActive = false
@@ -293,16 +293,20 @@ final class AppState: ObservableObject {
 
     func finishRecording() {
         guard case .recording = phase else { return }
+        // Visual feedback FIRST: the pill switches to processing in the very same
+        // run-loop turn as the key release — recorder teardown, sound and pipeline
+        // setup follow. (Previously the pill kept its recording look for the
+        // ~0.5 s of synchronous stop work, which read as a hang.)
+        setPhase(.processing)
+        streamingPreview = ""
         guard let (url, duration) = recorder.stop() else {
             setPhase(.idle)
             return
         }
         Sounds.playStop()
-        streamingPreview = ""
         let useLive = liveActive
         liveActive = false
         if !useLive { liveTranscriber.cancel() }
-        setPhase(.processing)
         let mode = selectedMode
         let dictionary = dictionaryWords
         pipelineGeneration += 1
