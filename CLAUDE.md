@@ -59,12 +59,14 @@ Minimum-Deployment-Target: **macOS 26**.
   Auto-Erkennung DE/EN ist geplant, Hinweis dazu steht im Settings-UI).
 
 ## ⛔ Pille — eingefroren (Onur, 18.08.2026)
-Design, Größe, Animation und **Position** der Pille sind final und dürfen **nicht** mehr
-angefasst werden — außer Onur spricht es ausdrücklich an. Insbesondere: keine
-Positions-Verfolgung (Maus, Fokus, Aufnahmestart); die Pille bleibt auf ihrem Bildschirm,
-nur ein physischer Display-Wechsel platziert sie neu. Hintergrund: Mehrere gut gemeinte
-„Verbesserungen" (Bildschirm-Folgen, visibleFrame-Zentrierung, Layout-Umbauten) hatten
-jeweils neues Wandern/Rutschen verursacht.
+Design, Größe, Animation und Positionslogik der Pille sind final und dürfen **nicht** mehr
+angefasst werden — außer Onur spricht es ausdrücklich an.
+**Positionsregel (Onurs Vorgabe, wie Wispr Flow):** Die Pille sitzt unten mittig auf dem
+Bildschirm, auf dem sich der **Mauszeiger** befindet — NICHT dem fokussierten Fenster,
+NICHT dem Aufnahmestart. Wechsel erst, wenn die Maus ≥ 1 s auf einem anderen Bildschirm
+ist; niemals während Aufnahme/Verarbeitung; Zentrierung auf screen.frame.midX (nicht
+visibleFrame). Hintergrund: Fokus-Verfolgung und Aufnahmestart-Sprünge hatten wiederholt
+Wandern/Rutschen verursacht (im Log nachgewiesen).
 
 ## Veröffentlichung
 - GitHub: öffentliches Repo `avila-voice` unter Account `oyavuz-evo27` (gh-CLI angemeldet)

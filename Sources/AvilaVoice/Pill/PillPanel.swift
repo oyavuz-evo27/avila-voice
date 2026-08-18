@@ -34,12 +34,27 @@ final class PillPanel: NSPanel {
         reposition(force: true)
         orderFrontRegardless()
 
-        // FIXED POSITION BY DECISION (Onur, 18.08.2026): the pill never follows the
-        // mouse, the focused window, or the recording start. It stays where it is;
-        // only a physical display-configuration change re-places it.
+        // Follow rule (Onur, 18.08.2026): the pill lives on the screen the MOUSE
+        // CURSOR is on — like Wispr Flow. Not the focused window, not the recording
+        // start. It migrates only after the cursor has been on another screen for
+        // `migrateAfter` seconds, and never during recording/processing.
+        followTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.5, target: self,
+                          selector: #selector(followTick), userInfo: nil, repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+        followTimer = timer
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+    }
+
+    private var followTimer: Timer?
+
+    @objc private func followTick() {
+        switch AppState.shared.phase {
+        case .recording, .processing: return
+        default: reposition()
+        }
     }
 
     @objc private func screensChanged() { reposition(force: true) }
@@ -53,11 +68,10 @@ final class PillPanel: NSPanel {
     /// only migrates once a new screen has been the focus target for a while.
     private var candidateScreenID: CGDirectDisplayID?
     private var candidateSince: Date?
-    static let migrateAfter: TimeInterval = 1.5
+    static let migrateAfter: TimeInterval = 1.0
 
     func reposition(force: Bool = false) {
-        // Placement screen: the one the mouse is on at app start (or after a display
-        // change) — no window-focus tracking, no mid-session moves.
+        // Screen under the mouse cursor (Wispr-Flow behaviour).
         guard let screen = NSScreen.screens.first(where: {
                 NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
             })
