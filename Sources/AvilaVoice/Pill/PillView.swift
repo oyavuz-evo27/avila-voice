@@ -356,7 +356,7 @@ struct PillView: View {
     private var pillSize: CGSize {
         switch state.phase {
         case .recording: CGSize(width: 84, height: 20)
-        case .processing, .result, .error: CGSize(width: 52, height: 17)
+        case .processing, .result, .error, .noSpeech: CGSize(width: 52, height: 17)
         case .idle: CGSize(width: 42, height: 11)
         }
     }
@@ -402,6 +402,12 @@ struct PillView: View {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(warmPink)
+                    .transition(Self.contentSwap)
+            case .noSpeech:
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.yellow)
+                    .help(L("error.noSpeech"))
                     .transition(Self.contentSwap)
             case .idle:
                 idleLine

@@ -10,6 +10,8 @@ enum DictationPhase: Equatable {
     case processing      // transcribing + enhancing
     case result(inserted: Bool)
     case error(String)
+    /// Silent dictation: subtle yellow marker, message only on hover, 2 s.
+    case noSpeech
 }
 
 /// Central state and pipeline coordinator.
@@ -466,6 +468,14 @@ final class AppState: ObservableObject {
 
     /// Shows an error in the pill and clears it automatically.
     private func setError(_ message: String) {
+        // "No speech" is not an error the user must read — a brief yellow marker.
+        if message == L("error.noSpeech") {
+            withAnimation(Self.phaseSpring) { phase = .noSpeech }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                if case .noSpeech = self?.phase { self?.setPhase(.idle) }
+            }
+            return
+        }
         withAnimation(Self.phaseSpring) { phase = .error(message) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
             if case .error = self?.phase { self?.setPhase(.idle) }
