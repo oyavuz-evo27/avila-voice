@@ -222,3 +222,15 @@ unter „Lokal" ergänzen).
   Pausen → 2–3 s Prefill-Strafe (40 Zeichen = 3,3 s). Fix: Policy auf ~140 Tokens gekürzt +
   Cache-Priming-Loop alle 4 min mit exaktem System-Prompt. Kalt 3,1 → 1,0 s, warm 0,3–0,7 s.
   Onur testet weiter; v0.2.1-Tag steht aus.
+- **2026-08-19 — v0.2.1 veröffentlicht (Onurs Wispr-Flow-Abo läuft aus).** Main-Thread-
+  Watchdog eingebaut (Stalls >150 ms geloggt) → Freeze-Ursachen gefunden & beseitigt:
+  NSSound/AVAudioPlayer.play() blockieren 200–340 ms (→ eigene Queue), AX-IPC
+  (Auswahl-Kontext, Fokus-Probe) lief auf dem MainActor (→ off-main), kalter
+  startRunning (→ captureQueue). Stumm-Diktat: gelbes 2-s-Symbol statt Fehler-Bubble
+  (typisiert via TranscriptionError.emptyResult). Code-Review (8 Befunde, 3× bestätigt):
+  Abbruch-Race beim Einfügen (Probe VOR finaler Generation/Phase-Prüfung, deliver wieder
+  synchron), Session-Start/Stop-Race (sessionStarting-Flag, stopRunning auf captureQueue),
+  Watchdog monoton + Flanken-Log, DebugLog thread-safe, Dedupe. Ergebnis: **null Stalls
+  bei kaltem und warmem Start.** Firebox-Tool (Ultrareview): EXIT-Trap für
+  Autostart-Re-Bootstrap. AvilaKit-Library-Target stammt aus paralleler Session
+  (Avila Projects); make_app.sh kopiert alle *.bundle.
