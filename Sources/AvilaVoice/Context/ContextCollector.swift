@@ -16,17 +16,15 @@ enum ContextCollector {
         if options.clipboard {
             context.clipboardText = NSPasteboard.general.string(forType: .string)
         }
-        if options.selectedText {
-            // AX queries are synchronous IPC into the target app — a busy Chrome or
-            // Teams answers in 100 ms … seconds. Never on the main thread (it froze
-            // the pill at recording start; measured 250 ms typical).
-            context.selectedText = await Task.detached(priority: .userInitiated) {
-                selectedText()
-            }.value
-        }
-        if options.screenshotOCR {
-            context.screenText = await screenText()
-        }
+        // Selection (AX IPC into the target app — 100 ms … seconds on a busy app;
+        // never on the main thread, it froze the pill) and screen OCR (~0.8 s) hit
+        // independent subsystems → run concurrently.
+        async let selection: String? = options.selectedText
+            ? Task.detached(priority: .userInitiated) { selectedText() }.value
+            : nil
+        async let screen: String? = options.screenshotOCR ? screenText() : nil
+        context.selectedText = await selection
+        context.screenText = await screen
         return context
     }
 

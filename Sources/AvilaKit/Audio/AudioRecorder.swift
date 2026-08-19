@@ -15,6 +15,9 @@ public enum RecorderError: Error, LocalizedError {
 /// the STT engines.
 public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private var session: AVCaptureSession?
+    /// True from the moment a session was created until its async startRunning()
+    /// has completed on the capture queue (isRunning lags behind `session`).
+    private var sessionStarting = false
     /// Device the warm session was built for ("" = system default).
     private var sessionDeviceUID: String?
     /// True only while a dictation writes to the file — the warm session between
@@ -96,7 +99,11 @@ public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBuffer
         converter = nil
 
         let wantedUID = UserDefaults.standard.string(forKey: "audio.inputDeviceUID") ?? ""
-        if let existing = session, existing.isRunning, sessionDeviceUID == wantedUID {
+        // "Running OR still starting" counts as reusable — startRunning() is async
+        // on the capture queue, so isRunning lags by 200–400 ms; tearing a starting
+        // session down would race its own startRunning().
+        if let existing = session, existing.isRunning || sessionStarting,
+           sessionDeviceUID == wantedUID {
             DebugLog.log("recording started — warm session reused")
         } else {
             shutdownSession()
@@ -157,12 +164,20 @@ public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBuffer
 
         session = newSession
         sessionDeviceUID = deviceUID
+        sessionStarting = true
         // startRunning blocks ~200–400 ms (measured on the main thread) — run it on
         // the capture queue so the pill animates from the very first frame. Buffers
         // arrive on the same serial queue, so no sample can precede the start.
         let name = device.localizedName
-        captureQueue.async {
+        let sessionID = ObjectIdentifier(newSession)
+        captureQueue.async { [weak self] in
             newSession.startRunning()
+            DispatchQueue.main.async { [weak self] in
+                // Only clear if this is still the current session.
+                if let current = self?.session, ObjectIdentifier(current) == sessionID {
+                    self?.sessionStarting = false
+                }
+            }
             DebugLog.log("recording started — capture device '\(name)' (cold start)")
         }
     }
@@ -217,10 +232,13 @@ public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBuffer
         guard let session else { return }
         self.session = nil
         sessionDeviceUID = nil
+        sessionStarting = false
         for output in session.outputs {
             (output as? AVCaptureAudioDataOutput)?.setSampleBufferDelegate(nil, queue: nil)
         }
-        DispatchQueue.global(qos: .userInitiated).async {
+        // Same serial queue as startRunning(): a stop can never overtake or run
+        // concurrently with a still-pending start of the same session.
+        captureQueue.async {
             session.stopRunning()
         }
     }
@@ -233,6 +251,9 @@ public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBuffer
         if stallTicks % 4 == 0 {
             DebugLog.log("capture status — buffers: \(bufferCount), peak level: \(String(format: "%.3f", peakLevel)), session running: \(session?.isRunning == true)")
         }
+        // While the session is still starting (async startRunning), no buffer can
+        // arrive yet — don't count that time against the grace window.
+        if sessionStarting { return }
         let reference = lastBufferAt ?? startedAt
         guard Date.now.timeIntervalSince(reference) > 1.2 else { return }
         DebugLog.log("audio input stalled (\(lastBufferAt == nil ? "no buffers since start" : "buffers stopped"), session running: \(session?.isRunning == true))")
@@ -241,7 +262,7 @@ public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBuffer
             shutdownSession()
             let uid = UserDefaults.standard.string(forKey: "audio.inputDeviceUID") ?? ""
             if (try? buildAndStartSession(deviceUID: uid)) != nil {
-                lastBufferAt = .now // fresh grace period for the rebuilt session
+                lastBufferAt = .now // grace restarts once sessionStarting clears
                 DebugLog.log("capture session rebuilt")
                 return
             }

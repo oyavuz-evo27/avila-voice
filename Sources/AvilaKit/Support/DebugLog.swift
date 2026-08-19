@@ -19,9 +19,12 @@ public enum DebugLog {
 
     public static func log(_ message: String) {
         NSLog("%@: %@", appName, message)
-        let line = "\(formatter.string(from: .now)) \(message)\n"
+        let stamp = Date()
         let target = url
+        // Format inside the serial queue: DateFormatter is not thread-safe and log()
+        // is called from the main thread, the capture queue and the watchdog queue.
         queue.async {
+            let line = "\(formatter.string(from: stamp)) \(message)\n"
             guard let data = line.data(using: .utf8) else { return }
             if let handle = try? FileHandle(forWritingTo: target) {
                 defer { try? handle.close() }

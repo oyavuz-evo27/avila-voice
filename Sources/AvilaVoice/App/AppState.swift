@@ -279,16 +279,9 @@ final class AppState: ObservableObject {
                     }
                 }
             }
-            let t0 = Date()
             try recorder.start()
-            let t1 = Date()
             setPhase(.recording)
-            let t2 = Date()
             Sounds.playStart()
-            let t3 = Date()
-            DebugLog.log(String(format: "start timing — recorder %.0f ms, setPhase %.0f ms, sound %.0f ms",
-                                t1.timeIntervalSince(t0) * 1000, t2.timeIntervalSince(t1) * 1000,
-                                t3.timeIntervalSince(t2) * 1000))
             let mode = selectedMode
             if mode.context.any {
                 let options = mode.context
@@ -340,7 +333,7 @@ final class AppState: ObservableObject {
                 // instead of feeding it to the STT engine.
                 let file = try AVAudioFile(forReading: url)
                 guard Double(file.length) / file.processingFormat.sampleRate >= 0.3 else {
-                    self.setError(L("error.noSpeech"))
+                    self.showNoSpeech()
                     return
                 }
                 let sttStarted = Date()
@@ -402,14 +395,23 @@ final class AppState: ObservableObject {
                 }
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
-                await self.deliver(raw: raw, final: final, mode: mode, duration: duration)
+                // The AX focus probe is blocking IPC into the target app — off the
+                // main thread. Re-validate AFTER it resolves: a cancel, a new recording
+                // or the watchdog may have moved the phase while we were suspended.
+                let editable = await Task.detached(priority: .userInitiated) {
+                    TextInserter.hasEditableFocus()
+                }.value
+                guard !Task.isCancelled, self.pipelineGeneration == generation,
+                      case .processing = self.phase else { return }
+                self.deliver(raw: raw, final: final, mode: mode, duration: duration,
+                             editable: editable)
             } catch {
                 DebugLog.log(String(format: "timing: pipeline failed after %.0f ms — %@",
                                     Date().timeIntervalSince(pipelineStarted) * 1000,
                                     error.localizedDescription))
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
-                self.setError(error.localizedDescription)
+                self.handlePipelineError(error)
             }
         }
 
@@ -440,12 +442,13 @@ final class AppState: ObservableObject {
         setPhase(.idle)
     }
 
-    private func deliver(raw: String, final: String, mode: Mode, duration: Double) async {
+    /// Synchronous on purpose: no suspension between the final generation/phase
+    /// check and the paste, so a cancel can never slip in between.
+    private func deliver(raw: String, final: String, mode: Mode, duration: Double,
+                         editable: Bool) {
         streamingPreview = ""
         livePreview = ""
         let insertStarted = Date()
-        // The AX focus probe is blocking IPC into the target app — off the main thread.
-        let editable = await Task.detached(priority: .userInitiated) { TextInserter.hasEditableFocus() }.value
         let inserted = editable && TextInserter.insert(final)
         DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
                             Date().timeIntervalSince(insertStarted) * 1000,
@@ -461,24 +464,37 @@ final class AppState: ObservableObject {
         setPhase(.result(inserted: inserted))
         // Brief confirmation, then back to idle (the copy circle keeps the text
         // reachable at any time).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            if case .result = self?.phase { self?.setPhase(.idle) }
+        autoReset(after: 2) { if case .result = $0 { return true }; return false }
+    }
+
+    /// Returns the pill to idle after `seconds` — unless the phase moved on meanwhile.
+    private func autoReset(after seconds: Double,
+                           while matches: @escaping @Sendable (DictationPhase) -> Bool) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self, matches(self.phase) else { return }
+            self.setPhase(.idle)
         }
+    }
+
+    /// Silent dictation: a brief yellow marker (message on hover), no error bubble.
+    private func showNoSpeech() {
+        setPhase(.noSpeech)
+        autoReset(after: 2) { $0 == .noSpeech }
     }
 
     /// Shows an error in the pill and clears it automatically.
     private func setError(_ message: String) {
-        // "No speech" is not an error the user must read — a brief yellow marker.
-        if message == L("error.noSpeech") {
-            withAnimation(Self.phaseSpring) { phase = .noSpeech }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                if case .noSpeech = self?.phase { self?.setPhase(.idle) }
-            }
-            return
-        }
-        withAnimation(Self.phaseSpring) { phase = .error(message) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            if case .error = self?.phase { self?.setPhase(.idle) }
+        setPhase(.error(message))
+        autoReset(after: 6) { if case .error = $0 { return true }; return false }
+    }
+
+    /// Routes pipeline errors: empty transcripts are typed (TranscriptionError.
+    /// emptyResult), not string-matched — no coupling between two localization tables.
+    private func handlePipelineError(_ error: Error) {
+        if case TranscriptionError.emptyResult = error {
+            showNoSpeech()
+        } else {
+            setError(error.localizedDescription)
         }
     }
 
@@ -564,27 +580,36 @@ enum Sounds {
 
     private static func makePlayer(_ name: String) -> AVAudioPlayer? {
         let url = URL(fileURLWithPath: "/System/Library/Sounds/\(name).aiff")
-        guard let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
-        player.volume = 0.25 // subtle — a confirmation, not an alert
-        player.prepareToPlay()
-        return player
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.volume = 0.25 // subtle — a confirmation, not an alert
+            player.prepareToPlay()
+            return player
+        } catch {
+            DebugLog.log("sound '\(name)' unavailable — \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// Prepare both players (and open the output route once) off the main thread.
     static func preload() {
+        guard enabled else { return }
         queue.async {
             start = makePlayer("Tink")
             stop = makePlayer("Pop")
         }
     }
 
-    static func playStart() {
-        guard enabled else { return }
-        queue.async { start?.currentTime = 0; start?.play() }
-    }
+    static func playStart() { play { start } }
+    static func playStop() { play { stop } }
 
-    static func playStop() {
+    private static func play(_ which: @escaping @Sendable () -> AVAudioPlayer?) {
         guard enabled else { return }
-        queue.async { stop?.currentTime = 0; stop?.play() }
+        queue.async {
+            if start == nil && stop == nil { start = makePlayer("Tink"); stop = makePlayer("Pop") }
+            guard let player = which() else { return }
+            player.currentTime = 0
+            player.play()
+        }
     }
 }

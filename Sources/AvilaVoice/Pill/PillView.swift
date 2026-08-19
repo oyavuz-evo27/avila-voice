@@ -399,14 +399,10 @@ struct PillView: View {
                     .font(.system(size: 11, weight: .bold))
                     .transition(Self.contentSwap)
             case .error:
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(warmPink)
+                warningIcon(color: warmPink)
                     .transition(Self.contentSwap)
             case .noSpeech:
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.yellow)
+                warningIcon(color: .yellow)
                     .help(L("error.noSpeech"))
                     .transition(Self.contentSwap)
             case .idle:
@@ -434,6 +430,12 @@ struct PillView: View {
             }
         }
         .scaleEffect(hoverPill ? 1.03 : 1.0)
+    }
+
+    private func warningIcon(color: Color) -> some View {
+        Image(systemName: "exclamationmark.triangle")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(color)
     }
 
     /// The idle line: gray at rest. Every few seconds the WHOLE bar lights up once
