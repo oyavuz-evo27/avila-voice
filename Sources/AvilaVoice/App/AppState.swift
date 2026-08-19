@@ -144,6 +144,7 @@ final class AppState: ObservableObject {
         hotkeys.onEscapeCancel = { [weak self] in self?.cancelRecording() }
         hotkeys.onStatusChange = { [weak self] active in self?.hotkeysActive = active }
         hotkeys.start()
+        Sounds.preload()
         Task.detached { [appleSTT] in await appleSTT.warmUp() }
         if sttChoice == "parakeet" { Task.detached { [parakeetSTT] in await parakeetSTT.warmUp() } }
         let mode = selectedMode
@@ -276,9 +277,16 @@ final class AppState: ObservableObject {
                     }
                 }
             }
+            let t0 = Date()
             try recorder.start()
+            let t1 = Date()
             setPhase(.recording)
+            let t2 = Date()
             Sounds.playStart()
+            let t3 = Date()
+            DebugLog.log(String(format: "start timing — recorder %.0f ms, setPhase %.0f ms, sound %.0f ms",
+                                t1.timeIntervalSince(t0) * 1000, t2.timeIntervalSince(t1) * 1000,
+                                t3.timeIntervalSince(t2) * 1000))
             let mode = selectedMode
             if mode.context.any {
                 let options = mode.context
@@ -392,7 +400,7 @@ final class AppState: ObservableObject {
                 }
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
-                self.deliver(raw: raw, final: final, mode: mode, duration: duration)
+                await self.deliver(raw: raw, final: final, mode: mode, duration: duration)
             } catch {
                 DebugLog.log(String(format: "timing: pipeline failed after %.0f ms — %@",
                                     Date().timeIntervalSince(pipelineStarted) * 1000,
@@ -430,11 +438,13 @@ final class AppState: ObservableObject {
         setPhase(.idle)
     }
 
-    private func deliver(raw: String, final: String, mode: Mode, duration: Double) {
+    private func deliver(raw: String, final: String, mode: Mode, duration: Double) async {
         streamingPreview = ""
         livePreview = ""
         let insertStarted = Date()
-        let inserted = TextInserter.hasEditableFocus() && TextInserter.insert(final)
+        // The AX focus probe is blocking IPC into the target app — off the main thread.
+        let editable = await Task.detached(priority: .userInitiated) { TextInserter.hasEditableFocus() }.value
+        let inserted = editable && TextInserter.insert(final)
         DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
                             Date().timeIntervalSince(insertStarted) * 1000,
                             inserted ? "ja" : "nein"))
@@ -529,16 +539,42 @@ final class AppState: ObservableObject {
     }
 }
 
+/// Start/stop chimes. Played on a dedicated background queue: BOTH NSSound and
+/// AVAudioPlayer block the calling thread for ~200–340 ms on play() (measured — the
+/// audio output route is opened synchronously), which froze the pill at recording
+/// start when called from the main thread.
 enum Sounds {
+    nonisolated(unsafe) private static var start: AVAudioPlayer?
+    nonisolated(unsafe) private static var stop: AVAudioPlayer?
+    private static let queue = DispatchQueue(label: "avila.sounds", qos: .userInteractive)
+
     static var enabled: Bool {
         UserDefaults.standard.object(forKey: "sounds.enabled") as? Bool ?? true
     }
-    static func playStart() { play("Tink") }
-    static func playStop() { play("Pop") }
 
-    private static func play(_ name: String) {
-        guard enabled, let sound = NSSound(named: name) else { return }
-        sound.volume = 0.25 // subtle — a confirmation, not an alert
-        sound.play()
+    private static func makePlayer(_ name: String) -> AVAudioPlayer? {
+        let url = URL(fileURLWithPath: "/System/Library/Sounds/\(name).aiff")
+        guard let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
+        player.volume = 0.25 // subtle — a confirmation, not an alert
+        player.prepareToPlay()
+        return player
+    }
+
+    /// Prepare both players (and open the output route once) off the main thread.
+    static func preload() {
+        queue.async {
+            start = makePlayer("Tink")
+            stop = makePlayer("Pop")
+        }
+    }
+
+    static func playStart() {
+        guard enabled else { return }
+        queue.async { start?.currentTime = 0; start?.play() }
+    }
+
+    static func playStop() {
+        guard enabled else { return }
+        queue.async { stop?.currentTime = 0; stop?.play() }
     }
 }

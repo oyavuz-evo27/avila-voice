@@ -9,7 +9,7 @@ enum TextInserter {
 
     /// Controls whose value is settable but that cannot take pasted text — the
     /// settable-fallback must not "insert" into these.
-    private static let nonTextRoles: Set<String> = [
+    nonisolated private static let nonTextRoles: Set<String> = [
         "AXSlider", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXMenuButton",
         "AXIncrementor", "AXButton", "AXDisclosureTriangle", "AXValueIndicator",
     ]
@@ -17,7 +17,7 @@ enum TextInserter {
     /// True if the frontmost app has a focused element that accepts text.
     /// Secure fields are excluded: a dictated password must never be pasted, logged
     /// to history, or counted in statistics.
-    static func hasEditableFocus() -> Bool {
+    nonisolated static func hasEditableFocus() -> Bool {
         guard AXIsProcessTrusted() else { return false }
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?

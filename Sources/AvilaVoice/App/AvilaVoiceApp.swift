@@ -120,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             PermissionRequester.requestOnFirstLaunch()
             registerLoginItemOnFirstLaunch()
             DebugHooks.install()
+            MainThreadWatchdog.shared.start()
         }
     }
 

@@ -157,8 +157,14 @@ public final class AudioRecorder: NSObject, AVCaptureAudioDataOutputSampleBuffer
 
         session = newSession
         sessionDeviceUID = deviceUID
-        newSession.startRunning()
-        DebugLog.log("recording started — capture device '\(device.localizedName)' (cold start)")
+        // startRunning blocks ~200–400 ms (measured on the main thread) — run it on
+        // the capture queue so the pill animates from the very first frame. Buffers
+        // arrive on the same serial queue, so no sample can precede the start.
+        let name = device.localizedName
+        captureQueue.async {
+            newSession.startRunning()
+            DebugLog.log("recording started — capture device '\(name)' (cold start)")
+        }
     }
 
     /// Stops the recording and returns (file, duration in seconds).

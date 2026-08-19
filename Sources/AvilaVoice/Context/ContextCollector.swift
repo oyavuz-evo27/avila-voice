@@ -17,7 +17,12 @@ enum ContextCollector {
             context.clipboardText = NSPasteboard.general.string(forType: .string)
         }
         if options.selectedText {
-            context.selectedText = selectedText()
+            // AX queries are synchronous IPC into the target app — a busy Chrome or
+            // Teams answers in 100 ms … seconds. Never on the main thread (it froze
+            // the pill at recording start; measured 250 ms typical).
+            context.selectedText = await Task.detached(priority: .userInitiated) {
+                selectedText()
+            }.value
         }
         if options.screenshotOCR {
             context.screenText = await screenText()
@@ -27,7 +32,7 @@ enum ContextCollector {
 
     // MARK: - Selected text (Accessibility)
 
-    private static func selectedText() -> String? {
+    nonisolated private static func selectedText() -> String? {
         guard AXIsProcessTrusted() else { return nil }
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
