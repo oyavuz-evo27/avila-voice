@@ -67,6 +67,12 @@ final class PillPanel: NSPanel {
     private var candidateScreenID: CGDirectDisplayID?
     private var candidateSince: Date?
     static let migrateAfter: TimeInterval = 1.0
+    /// Pending VERTICAL anchor and since when — the height only changes once the
+    /// new baseline has been stable for `anchorDebounce` seconds. Fullscreen
+    /// transitions and Mission Control flicker the detection for a moment; without
+    /// this the pill bounced 61 pt up and down (MacBook Air report, 20.08.).
+    private var baselineCandidate: (y: CGFloat, since: Date)?
+    static let anchorDebounce: TimeInterval = 1.5
 
     /// Bottom center of the screen under the MOUSE CURSOR (Onur's frozen rule).
     /// Vertical anchor (issue #6): the PHYSICAL bottom edge — raised above the Dock
@@ -80,10 +86,11 @@ final class PillPanel: NSPanel {
 
         let screenID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
             as? CGDirectDisplayID
+        let sameScreen = (screenID == currentScreenID)
         // Debounce SCREEN MIGRATION only (issue #4: this early-exit used to run
         // before the force check and also skipped same-screen re-anchoring, so Dock
         // and resolution changes were never picked up).
-        if screenID != currentScreenID, isVisible, !force {
+        if !sameScreen, isVisible, !force {
             if candidateScreenID != screenID {
                 candidateScreenID = screenID
                 candidateSince = Date()
@@ -101,12 +108,31 @@ final class PillPanel: NSPanel {
         }
         // Horizontal center of the FULL screen (visibleFrame.midX shifts with a side
         // Dock and made the pill slide); vertical from the physical bottom edge.
-        let origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2,
-                             y: Self.baselineY(for: screen))
+        let (targetY, reason) = Self.baseline(for: screen)
+        var origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2, y: targetY)
+
+        // Vertical re-anchoring is debounced on the SAME screen: adopt a new height
+        // only after it has been the stable target for `anchorDebounce`.
+        if sameScreen, isVisible, !force, abs(frame.origin.y - targetY) > 0.5 {
+            if let candidate = baselineCandidate, abs(candidate.y - targetY) < 0.5 {
+                if Date().timeIntervalSince(candidate.since) < Self.anchorDebounce {
+                    origin.y = frame.origin.y // not stable yet — hold position
+                } else {
+                    baselineCandidate = nil   // stable — adopt below
+                }
+            } else {
+                baselineCandidate = (targetY, Date())
+                origin.y = frame.origin.y
+            }
+        } else if abs(frame.origin.y - targetY) <= 0.5 {
+            baselineCandidate = nil
+        }
+
         if frame.origin != origin {
             setFrameOrigin(origin)
-            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f, y %.0f)",
-                                screenID.map(String.init) ?? "?", origin.x, origin.y))
+            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f, y %.0f — %@)",
+                                screenID.map(String.init) ?? "?",
+                                origin.x, origin.y, reason))
         }
         if !isVisible {
             orderFrontRegardless()
@@ -115,34 +141,40 @@ final class PillPanel: NSPanel {
 
     /// Wispr-Flow rule: sit at the physical bottom edge; step above the Dock only
     /// while the Dock is actually shown on this screen right now.
-    private static func baselineY(for screen: NSScreen) -> CGFloat {
+    private static func baseline(for screen: NSScreen) -> (y: CGFloat, reason: String) {
         let bottomEdge = screen.frame.minY + 6
         let dockReserved = screen.visibleFrame.minY - screen.frame.minY
         // No bottom reservation (auto-hidden Dock, side Dock, other screen) → edge.
-        guard dockReserved > 0 else { return bottomEdge }
+        guard dockReserved > 0 else { return (bottomEdge, "edge, no dock reservation") }
         // Reservation exists — but in a fullscreen Space the Dock is hidden while
-        // its reservation stays. A layer-0 window covering the whole screen means
-        // fullscreen → anchor to the edge like Wispr Flow.
-        if hasFullscreenWindow(on: screen) { return bottomEdge }
-        return screen.visibleFrame.minY + 6
+        // its reservation stays → anchor to the edge like Wispr Flow.
+        if hasFullscreenWindow(on: screen) { return (bottomEdge, "edge, fullscreen") }
+        return (screen.visibleFrame.minY + 6,
+                "above dock (\(Int(dockReserved)) pt)")
     }
 
-    /// True if any regular (layer-0) window exactly covers `screen` — the signature
-    /// of a fullscreen Space. Bounds/layer need no Screen-Recording permission.
+    /// True if a regular (layer-0) window fills `screen` the way a fullscreen Space
+    /// does: full width, reaching the physical bottom edge, and (nearly) full
+    /// height. Compared with tolerance instead of exact frame equality — on notched
+    /// MacBooks a fullscreen window stops below the camera housing, so an exact
+    /// match never fired there. Only consulted while the Dock reserves space, so a
+    /// merely maximized window (bounded by visibleFrame) can never reach the bottom.
     private static func hasFullscreenWindow(on screen: NSScreen) -> Bool {
         guard let info = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
             as? [[String: Any]] else { return false }
         let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
-        let target = CGRect(x: screen.frame.minX,
-                            y: primaryHeight - screen.frame.maxY,
-                            width: screen.frame.width,
-                            height: screen.frame.height)
+        let left = screen.frame.minX
+        let width = screen.frame.width
+        let bottomCG = primaryHeight - screen.frame.minY // CG y of the bottom edge
         for window in info {
             guard window[kCGWindowLayer as String] as? Int == 0,
                   let boundsDict = window[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsDict) else { continue }
-            if bounds.equalTo(target) { return true }
+            let coversWidth = abs(bounds.minX - left) < 1 && abs(bounds.width - width) < 1
+            let reachesBottom = abs(bounds.maxY - bottomCG) < 1
+            let tallEnough = bounds.height >= screen.frame.height - 80 // notch strip
+            if coversWidth && reachesBottom && tallEnough { return true }
         }
         return false
     }
