@@ -139,9 +139,10 @@ struct PillView: View {
                             .frame(width: size.width + 18, height: 1)
                             .allowsHitTesting(false)
 
-                        accessory(text: L("Modes"), hovering: hoverModes)
-                            .help(L("Modes"))
-                            .accessibilityLabel(L("Modes"))
+                        // Icon circle like the left one — equal visible MASS, not
+                        // just equal slots: the 39.5 pt text capsule vs the 23 pt
+                        // icon shifted the group's optical center 8 pt right (#9).
+                        accessory("wand.and.stars", hovering: hoverModes, help: L("Modes"))
                             .opacity(showAccessories ? 1 : 0)
                             .scaleEffect(showAccessories ? 1 : 0.6)
                             .allowsHitTesting(showAccessories)
@@ -263,17 +264,6 @@ struct PillView: View {
             .contentShape(Circle())
             .help(help)
             .accessibilityLabel(help)
-    }
-
-    private func accessory(text: String, hovering: Bool) -> some View {
-        Text(text)
-            .font(.system(size: 9.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8)
-            .frame(height: 23)
-            .background(.black.opacity(hovering ? 0.64 : 0.82), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(hovering ? 0.25 : 0.12)))
-            .contentShape(Capsule())
     }
 
     // MARK: - Bubbles

@@ -17,6 +17,9 @@ struct Mode: Identifiable, Codable, Equatable {
     var systemPrompt: String
     var context: ContextOptions
     var isBuiltin: Bool
+    /// false = raw transcript is inserted as-is, no LLM pass (issue #8: on 8-GB
+    /// machines the LLM step is 96–98 % of the wait).
+    var usesAI: Bool
 
     /// Localized name for built-in modes — but a user rename always wins.
     var displayName: String {
@@ -25,23 +28,26 @@ struct Mode: Identifiable, Codable, Equatable {
         case Mode.standard.id where name == Mode.standard.name: return L("mode.standard")
         case Mode.email.id where name == Mode.email.name: return L("mode.email")
         case Mode.translate.id where name == Mode.translate.name: return L("mode.translate")
+        case Mode.raw.id where name == Mode.raw.name: return L("mode.raw")
         default: return name
         }
     }
 
     init(id: UUID = UUID(), name: String, systemPrompt: String,
-         context: ContextOptions = ContextOptions(), isBuiltin: Bool = false) {
+         context: ContextOptions = ContextOptions(), isBuiltin: Bool = false,
+         usesAI: Bool = true) {
         self.id = id
         self.name = name
         self.systemPrompt = systemPrompt
         self.context = context
         self.isBuiltin = isBuiltin
+        self.usesAI = usesAI
     }
 
     // MARK: Codable (tolerates the legacy `useContext: Bool` field)
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, systemPrompt, context, isBuiltin, useContext
+        case id, name, systemPrompt, context, isBuiltin, useContext, usesAI
     }
 
     init(from decoder: Decoder) throws {
@@ -50,6 +56,7 @@ struct Mode: Identifiable, Codable, Equatable {
         name = try c.decode(String.self, forKey: .name)
         systemPrompt = try c.decode(String.self, forKey: .systemPrompt)
         isBuiltin = try c.decodeIfPresent(Bool.self, forKey: .isBuiltin) ?? false
+        usesAI = try c.decodeIfPresent(Bool.self, forKey: .usesAI) ?? true
         if let options = try c.decodeIfPresent(ContextOptions.self, forKey: .context) {
             context = options
         } else if (try c.decodeIfPresent(Bool.self, forKey: .useContext)) == true {
@@ -67,6 +74,7 @@ struct Mode: Identifiable, Codable, Equatable {
         try c.encode(systemPrompt, forKey: .systemPrompt)
         try c.encode(context, forKey: .context)
         try c.encode(isBuiltin, forKey: .isBuiltin)
+        try c.encode(usesAI, forKey: .usesAI)
     }
 
     // MARK: Built-ins
@@ -83,6 +91,14 @@ struct Mode: Identifiable, Codable, Equatable {
         nothing else.
         """,
         isBuiltin: true
+    )
+
+    static let raw = Mode(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+        name: "Raw",
+        systemPrompt: "",
+        isBuiltin: true,
+        usesAI: false
     )
 
     static let email = Mode(
@@ -111,5 +127,5 @@ struct Mode: Identifiable, Codable, Equatable {
         isBuiltin: true
     )
 
-    static let builtins: [Mode] = [.standard, .email, .translate]
+    static let builtins: [Mode] = [.standard, .raw, .email, .translate]
 }

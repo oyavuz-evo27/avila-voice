@@ -16,6 +16,7 @@
 "mode.standard" = "Standard";
 "mode.email" = "E-Mail";
 "mode.translate" = "Übersetzen";
+"mode.raw" = "Roh";
 
 /* Einstellungen */
 "General" = "Allgemein";
@@ -50,6 +51,8 @@
 "hotkey.hint" = "Klicken Sie auf das Feld und drücken Sie dann die gewünschte Taste, Tastenkombination oder Zusatz-Maustaste. Esc bricht ab. Push-to-talk: halten = aufnehmen (kurzer Druck schaltet um). Hands-free: einmal drücken startet, erneut drücken stoppt.";
 "Name" = "Name";
 "AI instruction" = "KI-Anweisung";
+"AI post-processing" = "KI-Nachbearbeitung";
+"usesAI.hint" = "Aus = die Roh-Transkription wird direkt eingefügt (schnellste Variante, empfohlen auf Macs mit 8 GB).";
 "Context" = "Kontext";
 "Active app" = "Aktive App";
 "Selected text" = "Markierter Text";

@@ -285,8 +285,10 @@ final class AppState: ObservableObject {
             let mode = selectedMode
             // Prewarm the LLM WHILE the user speaks — free warm-up time that covers
             // exactly the demand (issue #3: every dictation after the first ran on a
-            // cold session, ~2x latency).
-            Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+            // cold session, ~2x latency). AI-free modes have nothing to warm.
+            if mode.usesAI {
+                Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+            }
             if mode.context.any {
                 let options = mode.context
                 pendingContext = (mode.id, Task { await ContextCollector.collect(options) })
@@ -369,9 +371,10 @@ final class AppState: ObservableObject {
                 // enhancement failure (guardrails, context window) falls back to raw.
                 var final = raw
                 let words = raw.split { $0.isWhitespace || $0.isNewline }.count
-                // Very short dictations skip the LLM: ~350 ms saved, and the system
+                // AI-free modes insert the raw transcript directly (issue #8); very
+                // short dictations skip the LLM too: ~350 ms saved, and the system
                 // model tends to mistranslate 2–3-word inputs.
-                if words >= 4, await llmEngine.isAvailable() {
+                if mode.usesAI, words >= 4, await llmEngine.isAvailable() {
                     let llmStarted = Date()
                     do {
                         final = try await llmEngine.enhance(

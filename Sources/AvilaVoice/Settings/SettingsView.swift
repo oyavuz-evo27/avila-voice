@@ -306,9 +306,15 @@ struct ModeEditor: View {
                 TextField(L("Name"), text: $mode.name)
             }
             Section(L("AI instruction")) {
+                Toggle(L("AI post-processing"), isOn: $mode.usesAI)
+                Text(L("usesAI.hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 TextEditor(text: $mode.systemPrompt)
                     .font(.system(size: 11))
                     .frame(minHeight: 120)
+                    .disabled(!mode.usesAI)
+                    .opacity(mode.usesAI ? 1 : 0.4)
                 Text(L("instruction.hint"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -319,6 +325,7 @@ struct ModeEditor: View {
                 Toggle(L("Clipboard"), isOn: $mode.context.clipboard)
                 Toggle(L("Screen text (screenshot OCR)"), isOn: $mode.context.screenshotOCR)
             }
+            .disabled(!mode.usesAI)
         }
         .formStyle(.grouped)
     }
