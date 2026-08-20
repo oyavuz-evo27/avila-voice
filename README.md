@@ -17,8 +17,9 @@ No cloud. No account. No telemetry. No cost.
   screen your mouse cursor is on
 - ⌨️ **Types anywhere**: inserts text at the cursor of the frontmost app (clipboard
   fallback; your clipboard is restored afterwards). Esc cancels a running recording
-- 🤖 **AI modes** with editable instructions: Clean-up, E-Mail, Translate (DE ↔ EN) —
-  create, edit, and delete modes freely, each with its own AI prompt
+- 🤖 **AI modes** with editable instructions: Clean-up, Raw (no AI pass), E-Mail,
+  Translate (DE ↔ EN) — create, edit, and delete modes freely, each with its own AI
+  prompt ([field-tested prompt templates](docs/PROMPTS.md))
 - 🧠 **Context aware** (opt-in per mode): frontmost app, selected text, clipboard, and
   screen text via on-device OCR — captured at recording start, processed in parallel
 - 📖 **Personal dictionary** for names and technical terms
