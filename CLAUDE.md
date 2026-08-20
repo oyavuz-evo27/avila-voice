@@ -234,3 +234,15 @@ unter „Lokal" ergänzen).
   bei kaltem und warmem Start.** Firebox-Tool (Ultrareview): EXIT-Trap für
   Autostart-Re-Bootstrap. AvilaKit-Library-Target stammt aus paralleler Session
   (Avila Projects); make_app.sh kopiert alle *.bundle.
+- **2026-08-20 — v0.2.2: MacBook-Feldtest über GitHub Issues.** Workflow etabliert:
+  Onur meldet Bugs vom MacBook (Zweitkonto oyavuz-avorcia) als Issues, hier abarbeiten
+  (`gh issue list`), Antwort + Close pro Issue, neues Release. Sieben Issues behoben:
+  **#5 Release startete auf Fremdrechnern nie** (SwiftPM-Bundle.module-Accessor sucht
+  Bundle-Wurzel + CI-Build-Pfad → ResourceBundle-Resolver über Bundle.main.resourceURL,
+  verifiziert mit versteckter .build) · #2 Einfügen: AX-first (kAXSelectedTextAttribute),
+  Paste-Fallback-Restore 2 s · #1 Fn-Maske im Abgleich · #3 Prewarm bei Aufnahmestart +
+  Spare-Nachfüllen · #4 reposition(force:) griff nie (Frühausstieg vor force) · #6 Pille
+  am physischen Unterrand, über Dock nur wenn sichtbar (Vollbild via Layer-0-Fenster) ·
+  #7 Ollama-Cloud-Modelle (-cloud, remote_host) überall ausgeblendet — Lokal-Versprechen.
+  Zudem: Einstellungsfenster öffnet im Vordergrund (LSUIElement-Aktivierung),
+  Issue-Template. Wispr-Flow-Abo läuft in wenigen Tagen aus — MacBook nutzt v0.2.2.
