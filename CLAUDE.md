@@ -65,7 +65,9 @@ angefasst werden — außer Onur spricht es ausdrücklich an.
 Bildschirm, auf dem sich der **Mauszeiger** befindet — NICHT dem fokussierten Fenster,
 NICHT dem Aufnahmestart. Wechsel erst, wenn die Maus ≥ 1 s auf einem anderen Bildschirm
 ist; niemals während Aufnahme/Verarbeitung; Zentrierung auf screen.frame.midX (nicht
-visibleFrame). Hintergrund: Fokus-Verfolgung und Aufnahmestart-Sprünge hatten wiederholt
+visibleFrame). **Vertikal (Issue #6, 20.08.):** physischer Unterrand (frame.minY + 6);
+über das Dock nur, wenn es tatsächlich sichtbar ist (Vollbild → Rand); Nachführung im
+0,5-s-Tick, nie während Aufnahme. Hintergrund: Fokus-Verfolgung und Aufnahmestart-Sprünge hatten wiederholt
 Wandern/Rutschen verursacht (im Log nachgewiesen).
 
 ## Veröffentlichung
