@@ -27,6 +27,18 @@ enum DebugHooks {
                 await runRealDictationProbe()
             }
         }
+        // avila.debug.insert — run TextInserter.insert with the notification's
+        // object string (or a marker text) against the current focus, bypassing
+        // STT/LLM. Lets the insertion paths be tested without a microphone.
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("avila.debug.insert"), object: nil, queue: .main
+        ) { note in
+            let text = (note.object as? String) ?? "AvilaInsertProbe123"
+            Task { @MainActor in
+                let ok = TextInserter.insert(text)
+                DebugLog.log("debug: insert test returned \(ok)")
+            }
+        }
         // avila.debug.installParakeet — kick off the Parakeet download exactly as
         // the Settings button would.
         DistributedNotificationCenter.default().addObserver(

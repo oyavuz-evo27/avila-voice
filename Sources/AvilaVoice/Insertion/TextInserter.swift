@@ -56,15 +56,20 @@ enum TextInserter {
     /// restore race of issue #2 cannot occur. Fallback: clipboard + Cmd+V.
     static func insert(_ text: String) -> Bool {
         guard AXIsProcessTrusted() else { return false }
+        let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
         if axInsert(text) {
-            DebugLog.log("insert method: ax (verified)")
+            DebugLog.log("insert method: ax → \(app) (value change verified)")
             return true
         }
+        DebugLog.log("insert method: paste → \(app) (dispatched, restore in 2 s)")
         return pasteInsert(text)
     }
 
-    /// Direct Accessibility insertion — only where the target element declares the
-    /// attribute settable; returns false otherwise so the paste fallback runs.
+    /// Direct Accessibility insertion. A .success return from the set call is NOT
+    /// proof — several apps (Electron, some web views) answer .success and change
+    /// nothing (observed 20.08.: dictations silently vanished). The insertion only
+    /// counts if the element's VALUE verifiably changed; everything else falls
+    /// through to the paste path, which these apps handle correctly.
     private static func axInsert(_ text: String) -> Bool {
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
@@ -78,9 +83,21 @@ enum TextInserter {
                                              kAXSelectedTextAttribute as CFString,
                                              &settable) == .success,
               settable.boolValue else { return false }
-        return AXUIElementSetAttributeValue(element,
-                                            kAXSelectedTextAttribute as CFString,
-                                            text as CFString) == .success
+        // Verification requires a readable, reasonably sized value snapshot.
+        guard let before = stringValue(of: element),
+              before.utf16.count < 500_000 else { return false }
+        guard AXUIElementSetAttributeValue(element,
+                                           kAXSelectedTextAttribute as CFString,
+                                           text as CFString) == .success else { return false }
+        guard let after = stringValue(of: element), after != before else { return false }
+        return true
+    }
+
+    private static func stringValue(of element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString,
+                                            &value) == .success else { return nil }
+        return value as? String
     }
 
     /// Clipboard + Cmd+V. The old clipboard is restored after 2 s (was 0.6 s — on a
@@ -107,7 +124,6 @@ enum TextInserter {
         vUp?.flags = .maskCommand
         vDown?.post(tap: .cghidEventTap)
         vUp?.post(tap: .cghidEventTap)
-        DebugLog.log("insert method: paste (dispatched, unverified — restore in 2 s)")
 
         // Restore the clipboard after the paste has been processed — but only if the
         // board still holds our text. If the user (or an app) wrote to it meanwhile,
