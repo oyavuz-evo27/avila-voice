@@ -42,7 +42,8 @@ struct AvilaVoiceApp: App {
 
     /// The Amosia waveform logo as a template image (adapts to the menu bar theme).
     static let brandIcon: NSImage? = {
-        guard let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png"),
+        let bundle = ResourceBundle.named("AvilaVoice_AvilaVoice") ?? Bundle.module
+        guard let url = bundle.url(forResource: "MenuBarIcon", withExtension: "png"),
               let image = NSImage(contentsOf: url) else { return nil }
         image.isTemplate = true
         image.size = NSSize(width: 18, height: 18)

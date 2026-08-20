@@ -62,6 +62,10 @@ actor FoundationModelsEngine: EnhancementEngine {
         } else {
             session = LanguageModelSession(instructions: combined)
         }
+        // Replenish the spare for the NEXT dictation right away (issue #3) — the
+        // recording-start prewarm covers the common case, this covers rapid-fire
+        // dictations in between.
+        Task { await self.prewarm(mode: mode) }
 
         let prompt = PromptBuilder.userPrompt(transcript: transcript,
                                               dictionary: dictionary,

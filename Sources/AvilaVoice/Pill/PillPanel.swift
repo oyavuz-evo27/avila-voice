@@ -60,19 +60,19 @@ final class PillPanel: NSPanel {
 
     @objc private func screensChanged() { reposition(force: true) }
 
-    /// Bottom center of the active screen, above the Dock (visibleFrame).
-    /// "Active" = the screen with the focused window (where dictated text will go);
-    /// fallbacks: mouse screen, then main screen.
-    /// The screen the pill currently lives on; only a CHANGE of screen moves the pill.
+    /// The screen the pill currently lives on; only a CHANGE of screen migrates it.
     private var currentScreenID: CGDirectDisplayID?
-    /// Candidate target screen and since when it has been the target — the pill
-    /// only migrates once a new screen has been the focus target for a while.
+    /// Candidate target screen and since when — the pill only migrates once the
+    /// mouse has been on another screen for `migrateAfter` seconds.
     private var candidateScreenID: CGDirectDisplayID?
     private var candidateSince: Date?
     static let migrateAfter: TimeInterval = 1.0
 
+    /// Bottom center of the screen under the MOUSE CURSOR (Onur's frozen rule).
+    /// Vertical anchor (issue #6): the PHYSICAL bottom edge — raised above the Dock
+    /// only while the Dock is actually visible there. visibleFrame alone reserves
+    /// Dock space even in fullscreen, which left the pill hovering 61 pt too high.
     func reposition(force: Bool = false) {
-        // Screen under the mouse cursor (Wispr-Flow behaviour).
         guard let screen = NSScreen.screens.first(where: {
                 NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
             })
@@ -80,17 +80,10 @@ final class PillPanel: NSPanel {
 
         let screenID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
             as? CGDirectDisplayID
-        // Same screen as before → never touch the position (no jitter, no drift
-        // from transient Dock/menu-bar geometry changes).
-        if screenID == currentScreenID, isVisible {
-            candidateScreenID = nil
-            candidateSince = nil
-            return
-        }
-        // Debounce screen changes: focus flickers between windows on different
-        // monitors (⌘-Tab, dialogs, the target app activating) made the pill
-        // ping-pong. Require the new target to be stable for `migrateAfter`.
-        if !force, isVisible {
+        // Debounce SCREEN MIGRATION only (issue #4: this early-exit used to run
+        // before the force check and also skipped same-screen re-anchoring, so Dock
+        // and resolution changes were never picked up).
+        if screenID != currentScreenID, isVisible, !force {
             if candidateScreenID != screenID {
                 candidateScreenID = screenID
                 candidateSince = Date()
@@ -106,41 +99,52 @@ final class PillPanel: NSPanel {
         if frame.size != Self.panelSize {
             setContentSize(Self.panelSize)
         }
-        // Horizontal center of the FULL screen (not visibleFrame — a left/right Dock
-        // or a hidden/shown Dock would shift visibleFrame.midX and make the pill
-        // slide sideways); vertical position respects the Dock.
+        // Horizontal center of the FULL screen (visibleFrame.midX shifts with a side
+        // Dock and made the pill slide); vertical from the physical bottom edge.
         let origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2,
-                             y: screen.visibleFrame.minY + 6)
+                             y: Self.baselineY(for: screen))
         if frame.origin != origin {
             setFrameOrigin(origin)
-            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f)",
-                                screenID.map(String.init) ?? "?", origin.x))
+            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f, y %.0f)",
+                                screenID.map(String.init) ?? "?", origin.x, origin.y))
         }
         if !isVisible {
             orderFrontRegardless()
         }
     }
 
-    /// Screen containing the frontmost app's focused window (needs Accessibility).
-    private static func focusedWindowScreen() -> NSScreen? {
-        guard AXIsProcessTrusted(),
-              let app = NSWorkspace.shared.frontmostApplication else { return nil }
-        let axApp = AXUIElementCreateApplication(app.processIdentifier)
-        var windowRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString,
-                                            &windowRef) == .success,
-              let windowRef else { return nil }
-        let window = windowRef as! AXUIElement
-        var positionRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString,
-                                            &positionRef) == .success,
-              let positionRef else { return nil }
-        var topLeft = CGPoint.zero
-        guard AXValueGetValue(positionRef as! AXValue, .cgPoint, &topLeft) else { return nil }
-        // AX coordinates are global top-left origin; Cocoa screens are bottom-left.
+    /// Wispr-Flow rule: sit at the physical bottom edge; step above the Dock only
+    /// while the Dock is actually shown on this screen right now.
+    private static func baselineY(for screen: NSScreen) -> CGFloat {
+        let bottomEdge = screen.frame.minY + 6
+        let dockReserved = screen.visibleFrame.minY - screen.frame.minY
+        // No bottom reservation (auto-hidden Dock, side Dock, other screen) → edge.
+        guard dockReserved > 0 else { return bottomEdge }
+        // Reservation exists — but in a fullscreen Space the Dock is hidden while
+        // its reservation stays. A layer-0 window covering the whole screen means
+        // fullscreen → anchor to the edge like Wispr Flow.
+        if hasFullscreenWindow(on: screen) { return bottomEdge }
+        return screen.visibleFrame.minY + 6
+    }
+
+    /// True if any regular (layer-0) window exactly covers `screen` — the signature
+    /// of a fullscreen Space. Bounds/layer need no Screen-Recording permission.
+    private static func hasFullscreenWindow(on screen: NSScreen) -> Bool {
+        guard let info = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]] else { return false }
         let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
-        let cocoaPoint = NSPoint(x: topLeft.x + 1, y: primaryHeight - topLeft.y - 1)
-        return NSScreen.screens.first { NSMouseInRect(cocoaPoint, $0.frame, false) }
+        let target = CGRect(x: screen.frame.minX,
+                            y: primaryHeight - screen.frame.maxY,
+                            width: screen.frame.width,
+                            height: screen.frame.height)
+        for window in info {
+            guard window[kCGWindowLayer as String] as? Int == 0,
+                  let boundsDict = window[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: boundsDict) else { continue }
+            if bounds.equalTo(target) { return true }
+        }
+        return false
     }
 
     override var canBecomeKey: Bool { false }

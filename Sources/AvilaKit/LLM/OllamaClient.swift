@@ -13,9 +13,19 @@ public struct OllamaClient: Sendable {
     public struct Model: Decodable, Identifiable, Sendable, Equatable {
         public let name: String
         public let size: Int64
+        /// Set for Ollama CLOUD models ("-cloud" tags): requests are forwarded to
+        /// this host (ollama.com) — the model does NOT run locally (issue #7).
+        public let remoteHost: String?
         public var id: String { name }
         public var sizeGB: Double { Double(size) / 1e9 }
-        public init(name: String, size: Int64) { self.name = name; self.size = size }
+        public var isCloud: Bool { remoteHost != nil }
+        enum CodingKeys: String, CodingKey {
+            case name, size
+            case remoteHost = "remote_host"
+        }
+        public init(name: String, size: Int64, remoteHost: String? = nil) {
+            self.name = name; self.size = size; self.remoteHost = remoteHost
+        }
     }
 
     public struct Message: Sendable, Equatable {
@@ -61,7 +71,9 @@ public struct OllamaClient: Sendable {
         request.timeoutInterval = 3
         guard let (data, _) = try? await URLSession.shared.data(for: request),
               let tags = try? JSONDecoder().decode(Tags.self, from: data) else { return [] }
-        return tags.models
+        // Cloud models would silently forward every request to ollama.com — the
+        // Avila apps promise 100 % local processing, so they are never offered.
+        return tags.models.filter { !$0.isCloud }
     }
 
     public func isReachable() async -> Bool {

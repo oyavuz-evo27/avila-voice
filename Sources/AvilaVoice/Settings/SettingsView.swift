@@ -26,6 +26,7 @@ struct ModelsSettings: View {
     @EnvironmentObject var state: AppState
     @ObservedObject var store = ModelStore.shared
     @State private var ollamaModels: [OllamaEngine.OllamaModel] = []
+    @State private var hiddenCloudModels = 0
     @State private var ollamaModel: String = UserDefaults.standard.string(forKey: "engine.ollama.model") ?? ""
 
     var body: some View {
@@ -68,6 +69,11 @@ struct ModelsSettings: View {
                 }
                 Text(L("engine.ollama.hint"))
                     .font(.caption).foregroundStyle(.secondary)
+                if hiddenCloudModels > 0 {
+                    Label(LF("engine.ollama.cloudHidden", hiddenCloudModels),
+                          systemImage: "icloud.slash")
+                        .font(.caption).foregroundStyle(.orange)
+                }
             }
             Section {
                 Text(L("models.privacy"))
@@ -76,7 +82,9 @@ struct ModelsSettings: View {
         }
         .formStyle(.grouped)
         .task {
-            ollamaModels = await OllamaEngine.installedModels()
+            let catalog = await OllamaEngine.modelCatalog()
+            ollamaModels = catalog.local
+            hiddenCloudModels = catalog.cloudHidden
             if ollamaModel.isEmpty, let first = ollamaModels.first {
                 ollamaModel = first.name
                 UserDefaults.standard.set(first.name, forKey: "engine.ollama.model")

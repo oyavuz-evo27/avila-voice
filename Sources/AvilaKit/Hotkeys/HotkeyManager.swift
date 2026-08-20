@@ -360,7 +360,10 @@ public final class HotkeyManager: NSObject, @unchecked Sendable {
                 // release on the key code alone, but only if the press was ours.
                 return wasDown ? .up : nil
             }
-            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
+            // Same modifier set as capture (incl. Fn) — an asymmetric mask made every
+            // Fn-containing .key binding permanently dead (issue #1).
+            let relevant: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl,
+                                          .maskShift, .maskSecondaryFn]
             guard event.flags.rawValue & relevant.rawValue == mods else { return nil }
             if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return .swallow }
             return .down

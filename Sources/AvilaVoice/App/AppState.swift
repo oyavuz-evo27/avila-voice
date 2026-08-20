@@ -283,6 +283,10 @@ final class AppState: ObservableObject {
             setPhase(.recording)
             Sounds.playStart()
             let mode = selectedMode
+            // Prewarm the LLM WHILE the user speaks — free warm-up time that covers
+            // exactly the demand (issue #3: every dictation after the first ran on a
+            // cold session, ~2x latency).
+            Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
             if mode.context.any {
                 let options = mode.context
                 pendingContext = (mode.id, Task { await ContextCollector.collect(options) })

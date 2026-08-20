@@ -11,9 +11,10 @@ No cloud. No account. No telemetry. No cost.
 
 - 🎙️ **Push-to-talk or hands-free toggle** with freely configurable hotkeys — single
   keys, modifier combos (e.g. Fn+⌘), or extra mouse buttons (Logitech MX Master etc.)
-- 💊 **Dynamic-Island-style pill HUD** at the bottom of the active screen: grows from
-  the center on recording, live waveform, warm gradient ring, follows the focused
-  window across monitors
+- 💊 **Dynamic-Island-style pill HUD** at the very bottom of the screen (Wispr-Flow
+  style — it steps above the Dock only while the Dock is actually visible): grows
+  from the center on recording, live waveform, warm gradient ring, lives on the
+  screen your mouse cursor is on
 - ⌨️ **Types anywhere**: inserts text at the cursor of the frontmost app (clipboard
   fallback; your clipboard is restored afterwards). Esc cancels a running recording
 - 🤖 **AI modes** with editable instructions: Clean-up, E-Mail, Translate (DE ↔ EN) —
@@ -110,8 +111,10 @@ offers an optional **quality tier**:
 | AI rewriting | Apple Foundation Models — ~0 RAM | **Ollama** with any installed local model — recommended `gemma4:e4b-mlx` (~1.3 s for a 450-char dictation, 96 tok/s) or `gemma4:26b-mlx` (best quality): markedly better clean-up, follows instructions more strictly |
 
 Ollama is optional: install it from [ollama.com](https://ollama.com), run
-`ollama pull gemma4:e4b-mlx`, then pick "Ollama" in Settings → Models. Everything stays on
-your Mac — Avila Voice only talks to Ollama on `localhost:11434`.
+`ollama pull gemma4:e4b-mlx`, then pick "Ollama" in Settings → Models. Avila Voice only
+talks to Ollama on `localhost:11434` and only offers models that run locally: Ollama
+**cloud models** (`-cloud` tags) would forward requests to ollama.com, so Avila Voice
+hides them — the local-only promise ends at the Ollama boundary otherwise.
 
 ### Which engines for which Mac?
 

@@ -1,4 +1,5 @@
 import AppKit
+import AvilaKit
 import ApplicationServices
 
 /// Inserts text at the cursor of the frontmost app. Strategy: if a text element has
@@ -49,10 +50,43 @@ enum TextInserter {
         return settable.boolValue
     }
 
-    /// Pastes `text` into the frontmost app via Cmd+V, restoring the clipboard afterwards.
+    /// Inserts `text` at the caret of the frontmost app. Primary path: set the
+    /// focused element's AXSelectedText directly (exact paste semantics — replaces
+    /// the selection, inserts at the caret) with NO clipboard involvement, so the
+    /// restore race of issue #2 cannot occur. Fallback: clipboard + Cmd+V.
     static func insert(_ text: String) -> Bool {
         guard AXIsProcessTrusted() else { return false }
+        if axInsert(text) {
+            DebugLog.log("insert method: ax (verified)")
+            return true
+        }
+        return pasteInsert(text)
+    }
 
+    /// Direct Accessibility insertion — only where the target element declares the
+    /// attribute settable; returns false otherwise so the paste fallback runs.
+    private static func axInsert(_ text: String) -> Bool {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(systemWide,
+                                            kAXFocusedUIElementAttribute as CFString,
+                                            &focused) == .success,
+              let focused else { return false }
+        let element = focused as! AXUIElement
+        var settable = DarwinBoolean(false)
+        guard AXUIElementIsAttributeSettable(element,
+                                             kAXSelectedTextAttribute as CFString,
+                                             &settable) == .success,
+              settable.boolValue else { return false }
+        return AXUIElementSetAttributeValue(element,
+                                            kAXSelectedTextAttribute as CFString,
+                                            text as CFString) == .success
+    }
+
+    /// Clipboard + Cmd+V. The old clipboard is restored after 2 s (was 0.6 s — on a
+    /// swapping machine the target app lost that race and pasted the OLD clipboard,
+    /// issue #2); changeCount-guarded so a newer user copy is never destroyed.
+    private static func pasteInsert(_ text: String) -> Bool {
         let pasteboard = NSPasteboard.general
         let savedItems = pasteboard.pasteboardItems?.compactMap { item -> [NSPasteboard.PasteboardType: Data]? in
             var copy: [NSPasteboard.PasteboardType: Data] = [:]
@@ -73,11 +107,12 @@ enum TextInserter {
         vUp?.flags = .maskCommand
         vDown?.post(tap: .cghidEventTap)
         vUp?.post(tap: .cghidEventTap)
+        DebugLog.log("insert method: paste (dispatched, unverified — restore in 2 s)")
 
         // Restore the clipboard after the paste has been processed — but only if the
         // board still holds our text. If the user (or an app) wrote to it meanwhile,
         // restoring would destroy their newer content.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             guard pasteboard.changeCount == ourChangeCount else { return }
             pasteboard.clearContents()
             var restored: [NSPasteboardItem] = []

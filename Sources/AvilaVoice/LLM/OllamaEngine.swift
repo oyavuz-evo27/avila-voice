@@ -1,3 +1,4 @@
+import AvilaKit
 import Foundation
 
 /// Open-weights LLM (Gemma 4, Qwen3.x, …) served by a LOCAL Ollama instance
@@ -18,18 +19,39 @@ actor OllamaEngine: EnhancementEngine {
     struct OllamaModel: Decodable, Identifiable, Sendable {
         let name: String
         let size: Int64
+        /// Ollama CLOUD models ("-cloud") forward requests to this host — they do
+        /// not run locally and are therefore never used (issue #7).
+        let remoteHost: String?
         var id: String { name }
         var sizeGB: Double { Double(size) / 1e9 }
+        var isCloud: Bool { remoteHost != nil }
+        enum CodingKeys: String, CodingKey {
+            case name, size
+            case remoteHost = "remote_host"
+        }
     }
 
-    /// Lists installed models (empty if Ollama is not running).
-    static func installedModels() async -> [OllamaModel] {
+    /// LOCAL models plus the number of hidden cloud models (for the settings hint).
+    static func modelCatalog() async -> (local: [OllamaModel], cloudHidden: Int) {
         struct Tags: Decodable { let models: [OllamaModel] }
         var request = URLRequest(url: baseURL.appendingPathComponent("api/tags"))
         request.timeoutInterval = 2
         guard let (data, _) = try? await URLSession.shared.data(for: request),
-              let tags = try? JSONDecoder().decode(Tags.self, from: data) else { return [] }
-        return tags.models.sorted { $0.name < $1.name }
+              let tags = try? JSONDecoder().decode(Tags.self, from: data) else { return ([], 0) }
+        let cloud = tags.models.filter(\.isCloud)
+        if !cloud.isEmpty {
+            DebugLog.log("ollama: hiding \(cloud.count) cloud model(s): "
+                         + cloud.map(\.name).joined(separator: ", "))
+        }
+        return (tags.models.filter { !$0.isCloud }.sorted { $0.name < $1.name }, cloud.count)
+    }
+
+    /// Lists installed LOCAL models (empty if Ollama is not running). Cloud models
+    /// are excluded everywhere — picker, availability, fallback resolution — so a
+    /// stored "-cloud" selection makes the engine unavailable and the app falls
+    /// back to Apple instead of sending dictations to ollama.com.
+    static func installedModels() async -> [OllamaModel] {
+        await modelCatalog().local
     }
 
     func isAvailable() async -> Bool {
