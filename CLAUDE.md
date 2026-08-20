@@ -248,3 +248,18 @@ unter „Lokal" ergänzen).
   #7 Ollama-Cloud-Modelle (-cloud, remote_host) überall ausgeblendet — Lokal-Versprechen.
   Zudem: Einstellungsfenster öffnet im Vordergrund (LSUIElement-Aktivierung),
   Issue-Template. Wispr-Flow-Abo läuft in wenigen Tagen aus — MacBook nutzt v0.2.2.
+- **2026-08-20 (Nachmittag) — Hotfixes v0.2.3/v0.2.4 + Issues #8/#9 → v0.2.5.**
+  Regression aus #2-Fix: Apps quittieren AXSelectedText-Set mit .success ohne
+  einzufügen (Diktate verschwanden still) → AX-Pfad zählt nur noch bei
+  NACHGEWIESENER Wertänderung (Value-Snapshot vorher/nachher), sonst Cmd+V;
+  Ziel-App im Insert-Log; Debug-Hook avila.debug.insert (mikrofonfreier Test,
+  gegen TextEdit verifiziert). Pille auf dem Air: Vollbild-Erkennung war auf
+  Notch-Macs wirkungslos (exakter Frame-Vergleich) + flackerte bei Übergängen →
+  notch-tolerant (volle Breite + Unterkante + fast volle Höhe), Anker-Wechsel
+  erst nach 1,5 s Stabilität, jede Bewegung mit Grund geloggt. Einstellungen
+  öffnen im Vordergrund (LSUIElement-Aktivierung). **#8 Roh-Modus:** Mode.usesAI,
+  Builtin „Roh" (ID …0004), Editor-Toggle — auf 8-GB-Macs war der LLM-Schritt
+  96–98 % der Wartezeit. **#9:** Modi-Button jetzt Icon-Kreis wie Kopieren
+  (Textkapsel zog Schwerpunkt 8 pt nach rechts). **Onurs Regel: Releases NUR
+  auf ausdrückliche Freigabe** (drei Tags an einem Tag waren zu viel) — als
+  Memory gespeichert. v0.2.5 auf Onurs Freigabe getaggt; danach Testphase.
