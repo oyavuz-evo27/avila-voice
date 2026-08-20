@@ -94,7 +94,17 @@ struct MenuContent: View {
 
             Divider()
 
-            Button(L("Settings…")) { openSettings() }
+            Button(L("Settings…")) {
+                openSettings()
+                // LSUIElement apps are never the active app, so the Settings window
+                // materializes BEHIND the frontmost app. Activate and bring it up.
+                NSApp.activate(ignoringOtherApps: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NSApp.windows
+                        .first { $0.styleMask.contains(.titled) && !($0 is NSPanel) }?
+                        .makeKeyAndOrderFront(nil)
+                }
+            }
             Button(L("Check for Updates…")) {
                 NSWorkspace.shared.open(
                     URL(string: "https://github.com/oyavuz-evo27/avila-voice/releases")!)
