@@ -26,8 +26,14 @@ final class AppState: ObservableObject {
     @Published var modes: [Mode] = Mode.builtins
     @Published var selectedModeID: UUID = Mode.standard.id {
         didSet {
+            // Persist the choice — it silently reset to Standard on every app
+            // restart (bit Onur on 21.08.: raw mode vanished after a redeploy and
+            // the LLM ran again without any visible sign).
+            UserDefaults.standard.set(selectedModeID.uuidString, forKey: "modes.selected")
             let mode = selectedMode
-            Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+            if mode.usesAI {
+                Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+            }
         }
     }
     @Published var dictionaryWords: [String] = []
@@ -105,6 +111,12 @@ final class AppState: ObservableObject {
 
     private init() {
         loadModes()
+        // Restore the last selected mode (validated against the loaded list).
+        if let stored = UserDefaults.standard.string(forKey: "modes.selected"),
+           let id = UUID(uuidString: stored),
+           modes.contains(where: { $0.id == id }) {
+            selectedModeID = id
+        }
         loadDictionary()
         loadBindings()
         // Forward nested store changes so views observing AppState refresh live.
