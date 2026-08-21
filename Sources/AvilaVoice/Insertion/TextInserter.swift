@@ -19,35 +19,48 @@ enum TextInserter {
     /// Secure fields are excluded: a dictated password must never be pasted, logged
     /// to history, or counted in statistics.
     nonisolated static func hasEditableFocus() -> Bool {
-        guard AXIsProcessTrusted() else { return false }
+        editableFocusProbe().editable
+    }
+
+    /// Focus probe with a DIAGNOSABLE outcome (issue #11: five different reasons
+    /// produced an indistinguishable, unlogged `false`).
+    nonisolated static func editableFocusProbe() -> (editable: Bool, detail: String) {
+        let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+        guard AXIsProcessTrusted() else { return (false, "\(app): AX not trusted") }
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
         let err = AXUIElementCopyAttributeValue(systemWide,
                                                 kAXFocusedUIElementAttribute as CFString,
                                                 &focused)
-        guard err == .success, let element = focused else { return false }
+        guard err == .success, let element = focused else {
+            return (false, "\(app): no focused element (AXError \(err.rawValue))")
+        }
         let axElement = element as! AXUIElement
 
         var subroleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(axElement, kAXSubroleAttribute as CFString, &subroleRef)
         if subroleRef as? String == "AXSecureTextField" {
-            return false
+            return (false, "\(app): secure text field")
         }
 
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &roleRef)
         let role = roleRef as? String
         if let role, ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) {
-            return true
+            return (true, "\(app): \(role)")
         }
         if let role, Self.nonTextRoles.contains(role) {
-            return false
+            return (false, "\(app): non-text role \(role)")
         }
         // Many apps (browsers, Electron) expose editable areas differently — accept any
         // remaining element whose value is settable.
         var settable = DarwinBoolean(false)
-        AXUIElementIsAttributeSettable(axElement, kAXValueAttribute as CFString, &settable)
-        return settable.boolValue
+        let settableErr = AXUIElementIsAttributeSettable(axElement,
+                                                         kAXValueAttribute as CFString,
+                                                         &settable)
+        return (settable.boolValue,
+                "\(app): role \(role ?? "?"), value settable \(settable.boolValue)"
+                + (settableErr == .success ? "" : " (AXError \(settableErr.rawValue))"))
     }
 
     /// Inserts `text` at the caret of the frontmost app. Primary path: set the

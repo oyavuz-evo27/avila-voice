@@ -387,6 +387,7 @@ struct PillView: View {
             case .result(let inserted):
                 Image(systemName: inserted ? "checkmark" : "doc.on.clipboard")
                     .font(.system(size: 11, weight: .bold))
+                    .help(inserted ? "" : L("result.clipboard.hint"))
                     .transition(Self.contentSwap)
             case .error:
                 warningIcon(color: warmPink)
@@ -419,6 +420,13 @@ struct PillView: View {
                     .opacity(opacity)
             }
         }
+        // Issue #10: at a phase change the spring transaction leaked into the
+        // TICKED size — body, stroke, ring and content then interpolated the same
+        // geometry on two different curves and visibly drifted apart during
+        // grow/shrink. Size-driven layout must never animate implicitly; the
+        // manual ticker is the only animator of geometry. (Keyed to `size`, so
+        // phase transitions, hover and the idle pulse keep their animations.)
+        .animation(nil, value: size)
         .scaleEffect(hoverPill ? 1.03 : 1.0)
     }
 

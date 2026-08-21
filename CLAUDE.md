@@ -65,9 +65,10 @@ angefasst werden — außer Onur spricht es ausdrücklich an.
 Bildschirm, auf dem sich der **Mauszeiger** befindet — NICHT dem fokussierten Fenster,
 NICHT dem Aufnahmestart. Wechsel erst, wenn die Maus ≥ 1 s auf einem anderen Bildschirm
 ist; niemals während Aufnahme/Verarbeitung; Zentrierung auf screen.frame.midX (nicht
-visibleFrame). **Vertikal (Issue #6, 20.08.):** physischer Unterrand (frame.minY + 6);
-über das Dock nur, wenn es tatsächlich sichtbar ist (Vollbild → Rand); Nachführung im
-0,5-s-Tick, nie während Aufnahme. Hintergrund: Fokus-Verfolgung und Aufnahmestart-Sprünge hatten wiederholt
+visibleFrame). **Vertikal (Issue #12, 21.08. — ersetzt die #6-Regel):** IMMER physischer Unterrand
+(frame.minY + 6), keinerlei Dock-Ausweichen mehr — das Dock-Dodging erzeugte bei jedem
+Vollbild-Wechsel einen 61-pt-Sprung. Die Pille zeichnet über dem Dock (statusBar-Level),
+wie Wispr Flow. Höhe ist damit wirklich fix. Hintergrund: Fokus-Verfolgung und Aufnahmestart-Sprünge hatten wiederholt
 Wandern/Rutschen verursacht (im Log nachgewiesen).
 
 ## Veröffentlichung
@@ -263,3 +264,13 @@ unter „Lokal" ergänzen).
   (Textkapsel zog Schwerpunkt 8 pt nach rechts). **Onurs Regel: Releases NUR
   auf ausdrückliche Freigabe** (drei Tags an einem Tag waren zu viel) — als
   Memory gespeichert. v0.2.5 auf Onurs Freigabe getaggt; danach Testphase.
+- **2026-08-21 — Issues #10–#12 (MacBook-Feldtest, Runde 2).** **#12:** Dock-Ausweichen
+  komplett entfernt — Pille IMMER am physischen Unterrand, zeichnet über dem Dock
+  (Variante 1 aus dem Issue; die einzige, die „fix" einlöst); Split-Screen-Beobachtung
+  (Bildschirmmitte = Fensternaht) bewusst NICHT umgesetzt, separate Entscheidung.
+  **#11:** editableFocusProbe() mit Grund (App, Rolle, AXError), 400-ms-Retry bei
+  Fehlschlag, Log jeder Probe; Clipboard-Fall bleibt 5 s sichtbar + Tooltip „⌘V zum
+  Einsetzen". **#10:** Wurzel gefunden — Phasen-Spring leckte in die getickte Größe,
+  Ebenen interpolieren dieselbe Geometrie auf zwei Kurven → `.animation(nil, value: size)`
+  am Pillenkörper: Geometrie animiert NUR noch über den Ticker; lokal per animate-Sonde
+  verifiziert (Ebenen konzentrisch). Kein Release — wartet auf Onurs Freigabe.

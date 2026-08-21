@@ -95,6 +95,7 @@
 
 /* Errors */
 "error.noSpeech" = "No speech was recognized.";
+"result.clipboard.hint" = "No text field focused — the text is on the clipboard (⌘V to paste).";
 "error.noMicrophone" = "No microphone available.";
 "error.deviceChanged" = "The audio device changed — recording stopped.";
 "error.timeout" = "Processing took too long and was cancelled.";

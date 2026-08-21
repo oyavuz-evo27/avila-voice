@@ -67,13 +67,6 @@ final class PillPanel: NSPanel {
     private var candidateScreenID: CGDirectDisplayID?
     private var candidateSince: Date?
     static let migrateAfter: TimeInterval = 1.0
-    /// Pending VERTICAL anchor and since when — the height only changes once the
-    /// new baseline has been stable for `anchorDebounce` seconds. Fullscreen
-    /// transitions and Mission Control flicker the detection for a moment; without
-    /// this the pill bounced 61 pt up and down (MacBook Air report, 20.08.).
-    private var baselineCandidate: (y: CGFloat, since: Date)?
-    static let anchorDebounce: TimeInterval = 1.5
-
     /// Bottom center of the screen under the MOUSE CURSOR (Onur's frozen rule).
     /// Vertical anchor (issue #6): the PHYSICAL bottom edge — raised above the Dock
     /// only while the Dock is actually visible there. visibleFrame alone reserves
@@ -107,76 +100,20 @@ final class PillPanel: NSPanel {
             setContentSize(Self.panelSize)
         }
         // Horizontal center of the FULL screen (visibleFrame.midX shifts with a side
-        // Dock and made the pill slide); vertical from the physical bottom edge.
-        let (targetY, reason) = Self.baseline(for: screen)
-        var origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2, y: targetY)
-
-        // Vertical re-anchoring is debounced on the SAME screen: adopt a new height
-        // only after it has been the stable target for `anchorDebounce`.
-        if sameScreen, isVisible, !force, abs(frame.origin.y - targetY) > 0.5 {
-            if let candidate = baselineCandidate, abs(candidate.y - targetY) < 0.5 {
-                if Date().timeIntervalSince(candidate.since) < Self.anchorDebounce {
-                    origin.y = frame.origin.y // not stable yet — hold position
-                } else {
-                    baselineCandidate = nil   // stable — adopt below
-                }
-            } else {
-                baselineCandidate = (targetY, Date())
-                origin.y = frame.origin.y
-            }
-        } else if abs(frame.origin.y - targetY) <= 0.5 {
-            baselineCandidate = nil
-        }
-
+        // Dock and made the pill slide). Vertical (issue #12): ALWAYS the physical
+        // bottom edge — the Dock-dodge from #6 made the pill jump 61 pt on every
+        // fullscreen change. The panel draws above the Dock (statusBar level), like
+        // Wispr Flow; a truly FIXED position beats dodging.
+        let origin = NSPoint(x: screen.frame.midX - Self.panelSize.width / 2,
+                             y: screen.frame.minY + 6)
         if frame.origin != origin {
             setFrameOrigin(origin)
-            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f, y %.0f — %@)",
-                                screenID.map(String.init) ?? "?",
-                                origin.x, origin.y, reason))
+            DebugLog.log(String(format: "pill moved to screen %@ (x %.0f, y %.0f)",
+                                screenID.map(String.init) ?? "?", origin.x, origin.y))
         }
         if !isVisible {
             orderFrontRegardless()
         }
-    }
-
-    /// Wispr-Flow rule: sit at the physical bottom edge; step above the Dock only
-    /// while the Dock is actually shown on this screen right now.
-    private static func baseline(for screen: NSScreen) -> (y: CGFloat, reason: String) {
-        let bottomEdge = screen.frame.minY + 6
-        let dockReserved = screen.visibleFrame.minY - screen.frame.minY
-        // No bottom reservation (auto-hidden Dock, side Dock, other screen) → edge.
-        guard dockReserved > 0 else { return (bottomEdge, "edge, no dock reservation") }
-        // Reservation exists — but in a fullscreen Space the Dock is hidden while
-        // its reservation stays → anchor to the edge like Wispr Flow.
-        if hasFullscreenWindow(on: screen) { return (bottomEdge, "edge, fullscreen") }
-        return (screen.visibleFrame.minY + 6,
-                "above dock (\(Int(dockReserved)) pt)")
-    }
-
-    /// True if a regular (layer-0) window fills `screen` the way a fullscreen Space
-    /// does: full width, reaching the physical bottom edge, and (nearly) full
-    /// height. Compared with tolerance instead of exact frame equality — on notched
-    /// MacBooks a fullscreen window stops below the camera housing, so an exact
-    /// match never fired there. Only consulted while the Dock reserves space, so a
-    /// merely maximized window (bounded by visibleFrame) can never reach the bottom.
-    private static func hasFullscreenWindow(on screen: NSScreen) -> Bool {
-        guard let info = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-            as? [[String: Any]] else { return false }
-        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
-        let left = screen.frame.minX
-        let width = screen.frame.width
-        let bottomCG = primaryHeight - screen.frame.minY // CG y of the bottom edge
-        for window in info {
-            guard window[kCGWindowLayer as String] as? Int == 0,
-                  let boundsDict = window[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsDict) else { continue }
-            let coversWidth = abs(bounds.minX - left) < 1 && abs(bounds.width - width) < 1
-            let reachesBottom = abs(bounds.maxY - bottomCG) < 1
-            let tallEnough = bounds.height >= screen.frame.height - 80 // notch strip
-            if coversWidth && reachesBottom && tallEnough { return true }
-        }
-        return false
     }
 
     override var canBecomeKey: Bool { false }

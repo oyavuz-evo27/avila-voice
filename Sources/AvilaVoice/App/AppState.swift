@@ -405,9 +405,21 @@ final class AppState: ObservableObject {
                 // The AX focus probe is blocking IPC into the target app — off the
                 // main thread. Re-validate AFTER it resolves: a cancel, a new recording
                 // or the watchdog may have moved the phase while we were suspended.
-                let editable = await Task.detached(priority: .userInitiated) {
-                    TextInserter.hasEditableFocus()
+                // A failed probe is retried once after 400 ms (issue #11: under memory
+                // pressure the AX answer is sporadically late/empty) and ALWAYS logged
+                // with app, role and reason.
+                var probe = await Task.detached(priority: .userInitiated) {
+                    TextInserter.editableFocusProbe()
                 }.value
+                if !probe.editable {
+                    DebugLog.log("focus probe failed (\(probe.detail)) — retrying in 400 ms")
+                    try? await Task.sleep(for: .milliseconds(400))
+                    probe = await Task.detached(priority: .userInitiated) {
+                        TextInserter.editableFocusProbe()
+                    }.value
+                }
+                DebugLog.log("focus probe: \(probe.editable ? "editable" : "NOT editable") — \(probe.detail)")
+                let editable = probe.editable
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 self.deliver(raw: raw, final: final, mode: mode, duration: duration,
@@ -470,8 +482,9 @@ final class AppState: ObservableObject {
                                     durationSeconds: duration))
         setPhase(.result(inserted: inserted))
         // Brief confirmation, then back to idle (the copy circle keeps the text
-        // reachable at any time).
-        autoReset(after: 2) { if case .result = $0 { return true }; return false }
+        // reachable at any time). The clipboard case stays visible longer — the
+        // user must NOTICE that the text waits in the clipboard (issue #11).
+        autoReset(after: inserted ? 2 : 5) { if case .result = $0 { return true }; return false }
     }
 
     /// Returns the pill to idle after `seconds` — unless the phase moved on meanwhile.

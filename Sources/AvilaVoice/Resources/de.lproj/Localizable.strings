@@ -95,6 +95,7 @@
 
 /* Fehler */
 "error.noSpeech" = "Es wurde keine Sprache erkannt.";
+"result.clipboard.hint" = "Kein Textfeld im Fokus — der Text liegt in der Zwischenablage (⌘V zum Einsetzen).";
 "error.noMicrophone" = "Kein Mikrofon verfügbar.";
 "error.deviceChanged" = "Das Audiogerät hat sich geändert — die Aufnahme wurde gestoppt.";
 "error.timeout" = "Die Verarbeitung hat zu lange gedauert und wurde abgebrochen.";
