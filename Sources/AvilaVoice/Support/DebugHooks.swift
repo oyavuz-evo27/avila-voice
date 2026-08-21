@@ -35,8 +35,9 @@ enum DebugHooks {
         ) { note in
             let text = (note.object as? String) ?? "AvilaInsertProbe123"
             Task { @MainActor in
-                let ok = TextInserter.insert(text)
-                DebugLog.log("debug: insert test returned \(ok)")
+                let probe = TextInserter.focusProbe()
+                let ok = TextInserter.insert(text, access: probe.access)
+                DebugLog.log("debug: insert test (\(probe.detail)) returned \(ok)")
             }
         }
         // avila.debug.installParakeet — kick off the Parakeet download exactly as

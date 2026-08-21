@@ -297,9 +297,17 @@ final class AppState: ObservableObject {
             let mode = selectedMode
             // Prewarm the LLM WHILE the user speaks — free warm-up time that covers
             // exactly the demand (issue #3: every dictation after the first ran on a
-            // cold session, ~2x latency). AI-free modes have nothing to warm.
+            // cold session, ~2x latency). AI-free modes have nothing to warm; if the
+            // primary engine is unavailable, warm the Apple FALLBACK instead so a
+            // fallback dictation is not cold either (review finding).
             if mode.usesAI {
-                Task { [llmEngine] in await llmEngine.prewarm(mode: mode) }
+                Task { [llmEngine, appleLLM] in
+                    if await llmEngine.isAvailable() {
+                        await llmEngine.prewarm(mode: mode)
+                    } else if !(llmEngine is FoundationModelsEngine) {
+                        await appleLLM.prewarm(mode: mode)
+                    }
+                }
             }
             if mode.context.any {
                 let options = mode.context
@@ -393,27 +401,38 @@ final class AppState: ObservableObject {
                 if mode.usesAI, words >= 4 {
                     if await llmEngine.isAvailable() {
                         activeLLM = llmEngine
+                    } else if llmEngine is FoundationModelsEngine {
+                        DebugLog.log("llm SKIPPED: Apple Foundation Models unavailable — inserting raw transcript")
                     } else if await appleLLM.isAvailable() {
                         DebugLog.log("llm: '\(llmEngine.displayName)' unavailable — falling back to Apple Foundation Models")
                         activeLLM = appleLLM
                     } else {
-                        DebugLog.log("llm SKIPPED: no engine available ('\(llmEngine.displayName)' and Apple both unavailable) — inserting raw transcript")
+                        DebugLog.log("llm SKIPPED: '\(llmEngine.displayName)' and Apple both unavailable — inserting raw transcript")
                     }
                 }
-                if let llmEngine = activeLLM {
+                if let engine = activeLLM {
                     let llmStarted = Date()
+                    let onPartial: @Sendable (String) -> Void = { partial in
+                        Task { @MainActor in
+                            guard self.pipelineGeneration == generation else { return }
+                            self.streamingPreview = partial
+                        }
+                    }
                     do {
-                        final = try await llmEngine.enhance(
+                        final = try await engine.enhance(
                             transcript: raw, mode: mode, dictionary: dictionary,
-                            context: context,
-                            onPartial: { partial in
-                                Task { @MainActor in
-                                    guard self.pipelineGeneration == generation else { return }
-                                    self.streamingPreview = partial
-                                }
-                            })
+                            context: context, onPartial: onPartial)
                     } catch {
-                        NSLog("AvilaVoice: enhancement failed, using raw transcript — \(error.localizedDescription)")
+                        // Availability was checked BEFORE the call — the engine can
+                        // still die in between. One Apple retry keeps the #15 promise.
+                        if !(engine is FoundationModelsEngine), await appleLLM.isAvailable() {
+                            DebugLog.log("llm: '\(engine.displayName)' failed mid-request (\(error.localizedDescription)) — retrying with Apple Foundation Models")
+                            final = (try? await appleLLM.enhance(
+                                transcript: raw, mode: mode, dictionary: dictionary,
+                                context: context, onPartial: onPartial)) ?? raw
+                        } else {
+                            NSLog("AvilaVoice: enhancement failed, using raw transcript — \(error.localizedDescription)")
+                        }
                     }
                     DebugLog.log(String(format: "timing: llm %.0f ms",
                                         Date().timeIntervalSince(llmStarted) * 1000))
@@ -452,8 +471,7 @@ final class AppState: ObservableObject {
                     }.value
                 }
                 DebugLog.log("focus probe: \(probe.access) — \(probe.detail)")
-                let editable = probe.access != .blocked
-                let axAllowed = probe.access == .editable
+                let access = probe.access
                 // Wait (bounded) until the user's PHYSICAL modifiers are released:
                 // the raw-mode pipeline finishes faster than fingers lift off the
                 // stop hotkey — a still-held ⌥/⌘ merges into the synthesized ⌘V and
@@ -476,7 +494,7 @@ final class AppState: ObservableObject {
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 self.deliver(raw: raw, final: final, mode: mode, duration: duration,
-                             editable: editable, axAllowed: axAllowed)
+                             access: access)
             } catch {
                 DebugLog.log(String(format: "timing: pipeline failed after %.0f ms — %@",
                                     Date().timeIntervalSince(pipelineStarted) * 1000,
@@ -517,11 +535,11 @@ final class AppState: ObservableObject {
     /// Synchronous on purpose: no suspension between the final generation/phase
     /// check and the paste, so a cancel can never slip in between.
     private func deliver(raw: String, final: String, mode: Mode, duration: Double,
-                         editable: Bool, axAllowed: Bool) {
+                         access: TextInserter.FocusAccess) {
         streamingPreview = ""
         livePreview = ""
         let insertStarted = Date()
-        let inserted = editable && TextInserter.insert(final, axAllowed: axAllowed)
+        let inserted = TextInserter.insert(final, access: access)
         DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
                             Date().timeIntervalSince(insertStarted) * 1000,
                             inserted ? "ja" : "nein"))

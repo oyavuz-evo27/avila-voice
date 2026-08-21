@@ -19,10 +19,14 @@ enum TextInserter {
     /// Secure fields are excluded: a dictated password must never be pasted, logged
     /// to history, or counted in statistics.
     /// Tri-state focus verdict (issue #14): the AX write path needs a settable
-    /// element, but the Cmd+V paste path does NOT — an AXWebArea (Electron/web
-    /// views) takes paste just fine. Only secure fields, known non-text controls
-    /// and "no focused element at all" block insertion entirely.
-    enum FocusAccess { case editable, pasteOnly, blocked }
+    /// element; the Cmd+V paste path additionally works in web views (AXWebArea,
+    /// Electron editors) that expose no settable attribute. .pasteOnly is a strict
+    /// WHITELIST — a blanket "paste anywhere" fired ⌘V into Finder lists and
+    /// read-only pages with side effects (review finding, 21.08.).
+    enum FocusAccess: Equatable { case editable, pasteOnly, blocked }
+
+    /// Roles where a synthesized ⌘V is known to insert text.
+    nonisolated private static let pasteCapableRoles: Set<String> = ["AXWebArea"]
 
     nonisolated static func focusProbe() -> (access: FocusAccess, detail: String) {
         let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
@@ -37,10 +41,22 @@ enum TextInserter {
         }
         let axElement = element as! AXUIElement
 
+        // Secure-field check MUST be conclusive: .noValue/.attributeUnsupported means
+        // "has no subrole" (fine); any other error means we could not verify the
+        // element is NOT a password field — never paste on an unverified target.
         var subroleRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(axElement, kAXSubroleAttribute as CFString, &subroleRef)
-        if subroleRef as? String == "AXSecureTextField" {
-            return (.blocked, "\(app): secure text field")
+        let subErr = AXUIElementCopyAttributeValue(axElement,
+                                                   kAXSubroleAttribute as CFString,
+                                                   &subroleRef)
+        switch subErr {
+        case .success:
+            if subroleRef as? String == "AXSecureTextField" {
+                return (.blocked, "\(app): secure text field")
+            }
+        case .noValue, .attributeUnsupported:
+            break
+        default:
+            return (.blocked, "\(app): subrole query failed (AXError \(subErr.rawValue))")
         }
 
         var roleRef: CFTypeRef?
@@ -53,29 +69,32 @@ enum TextInserter {
             return (.blocked, "\(app): non-text role \(role)")
         }
         var settable = DarwinBoolean(false)
-        AXUIElementIsAttributeSettable(axElement, kAXValueAttribute as CFString, &settable)
+        let setErr = AXUIElementIsAttributeSettable(axElement,
+                                                    kAXValueAttribute as CFString,
+                                                    &settable)
         if settable.boolValue {
             return (.editable, "\(app): role \(role ?? "?"), value settable")
         }
-        // Not AX-writable, but focused and not secure (e.g. AXWebArea): the paste
-        // path works there — a wasted paste is harmless, the clipboard restore is
-        // changeCount-guarded.
-        return (.pasteOnly, "\(app): role \(role ?? "?"), paste only")
+        if let role, Self.pasteCapableRoles.contains(role) {
+            return (.pasteOnly, "\(app): \(role), paste only")
+        }
+        return (.blocked, "\(app): role \(role ?? "?"), not settable"
+                + (setErr == .success ? "" : " (AXError \(setErr.rawValue))"))
     }
 
-    /// Inserts `text` at the caret of the frontmost app. Primary path: set the
-    /// focused element's AXSelectedText directly (exact paste semantics — replaces
-    /// the selection, inserts at the caret) with NO clipboard involvement, so the
-    /// restore race of issue #2 cannot occur. Fallback: clipboard + Cmd+V.
-    static func insert(_ text: String, axAllowed: Bool = true) -> Bool {
-        guard AXIsProcessTrusted() else { return false }
+    static func insert(_ text: String, access: FocusAccess) -> Bool {
+        guard access != .blocked, AXIsProcessTrusted() else { return false }
         let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-        if axAllowed, axInsert(text) {
+        if access == .editable, axInsert(text) {
             DebugLog.log("insert method: ax → \(app) (value change verified)")
             return true
         }
-        DebugLog.log("insert method: paste → \(app) (dispatched, restore in 2 s)")
-        return pasteInsert(text)
+        // .pasteOnly targets are unverifiable — leave the dictation in the
+        // clipboard (no restore) so a swallowed paste never loses the text.
+        let restore = (access == .editable)
+        DebugLog.log("insert method: paste → \(app) (dispatched"
+                     + (restore ? ", restore in 2 s)" : ", clipboard kept)"))
+        return pasteInsert(text, restoreClipboard: restore)
     }
 
     /// Direct Accessibility insertion. A .success return from the set call is NOT
@@ -116,7 +135,7 @@ enum TextInserter {
     /// Clipboard + Cmd+V. The old clipboard is restored after 2 s (was 0.6 s — on a
     /// swapping machine the target app lost that race and pasted the OLD clipboard,
     /// issue #2); changeCount-guarded so a newer user copy is never destroyed.
-    private static func pasteInsert(_ text: String) -> Bool {
+    private static func pasteInsert(_ text: String, restoreClipboard: Bool = true) -> Bool {
         let pasteboard = NSPasteboard.general
         let savedItems = pasteboard.pasteboardItems?.compactMap { item -> [NSPasteboard.PasteboardType: Data]? in
             var copy: [NSPasteboard.PasteboardType: Data] = [:]
@@ -141,6 +160,7 @@ enum TextInserter {
         // Restore the clipboard after the paste has been processed — but only if the
         // board still holds our text. If the user (or an app) wrote to it meanwhile,
         // restoring would destroy their newer content.
+        guard restoreClipboard else { return true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             guard pasteboard.changeCount == ourChangeCount else { return }
             pasteboard.clearContents()

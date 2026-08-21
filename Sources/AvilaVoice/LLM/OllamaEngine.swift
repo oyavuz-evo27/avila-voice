@@ -6,34 +6,52 @@ import Foundation
 /// nothing leaves the machine. Chosen over embedded MLX because SwiftPM cannot
 /// compile MLX's Metal shaders without Xcode.
 actor OllamaEngine: EnhancementEngine {
-    nonisolated let displayName = "Ollama (lokal)"
+    nonisolated let displayName = "Ollama"
 
     /// Server address — configurable (issue #16) so a low-memory Mac can hand the
     /// AI pass to another OWN Mac on the local network (e.g. Air → Mac mini).
-    /// Default stays localhost; the settings UI shows an explicit notice for any
-    /// remote address, and the cloud-model filter (#7) applies unchanged.
+    /// Default stays localhost; the settings UI validates at write time and shows
+    /// an explicit notice for remote addresses; the cloud-model filter (#7) applies
+    /// unchanged.
     static var baseURL: URL {
-        let stored = UserDefaults.standard.string(forKey: "engine.ollama.host")?
-            .trimmingCharacters(in: .whitespaces) ?? ""
-        guard !stored.isEmpty else { return URL(string: "http://localhost:11434")! }
-        let candidate = stored.contains("://") ? stored : "http://" + stored
-        guard let url = URL(string: candidate), url.host != nil else {
-            return URL(string: "http://localhost:11434")!
-        }
-        return url
+        let stored = UserDefaults.standard.string(forKey: "engine.ollama.host") ?? ""
+        return normalizedURL(from: stored) ?? OllamaClient.defaultBaseURL
+    }
+
+    /// Parses a user-entered host into a usable URL. Empty → localhost default.
+    /// A missing port gets Ollama's default 11434 (plain "mac-mini.local" otherwise
+    /// landed on port 80 and silently never worked). Returns nil for garbage input
+    /// so the settings UI can REJECT it instead of silently falling back.
+    static func normalizedURL(from input: String) -> URL? {
+        let trimmed = input.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return OllamaClient.defaultBaseURL }
+        guard !trimmed.contains(" ") else { return nil }
+        let candidate = trimmed.contains("://") ? trimmed : "http://" + trimmed
+        guard var components = URLComponents(string: candidate),
+              let host = components.host, !host.isEmpty,
+              components.scheme == "http" || components.scheme == "https",
+              components.path.isEmpty || components.path == "/" else { return nil }
+        if components.port == nil { components.port = 11434 }
+        components.path = ""
+        return components.url
     }
 
     /// True when dictations would leave this Mac (any non-loopback host).
-    static var isRemoteHost: Bool {
-        let host = baseURL.host?.lowercased() ?? "localhost"
+    static var isRemoteHost: Bool { isRemote(url: baseURL) }
+
+    static func isRemote(url: URL) -> Bool {
+        let host = url.host?.lowercased() ?? "localhost"
         return !["localhost", "127.0.0.1", "::1"].contains(host)
     }
+
     /// Model tag chosen in settings (empty = first available).
     static var modelName: String {
         UserDefaults.standard.string(forKey: "engine.ollama.model") ?? ""
     }
 
-    private var lastAvailability: (Date, Bool)?
+    /// Availability cache, keyed to the config it was measured against — a host
+    /// or model change in settings must never serve a stale verdict.
+    private var lastAvailability: (when: Date, value: Bool, host: String, model: String)?
 
     struct OllamaModel: Decodable, Identifiable, Sendable {
         let name: String
@@ -74,13 +92,15 @@ actor OllamaEngine: EnhancementEngine {
     }
 
     func isAvailable() async -> Bool {
-        if let (when, value) = lastAvailability, Date().timeIntervalSince(when) < 10 {
-            return value
+        let host = Self.baseURL.absoluteString
+        let name = Self.modelName
+        if let cached = lastAvailability, Date().timeIntervalSince(cached.when) < 10,
+           cached.host == host, cached.model == name {
+            return cached.value
         }
         let models = await Self.installedModels()
-        let name = Self.modelName
         let available = !models.isEmpty && (name.isEmpty || models.contains { $0.name == name })
-        lastAvailability = (Date(), available)
+        lastAvailability = (Date(), available, host, name)
         return available
     }
 
@@ -165,7 +185,9 @@ actor OllamaEngine: EnhancementEngine {
         ]
         var request = URLRequest(url: Self.baseURL.appendingPathComponent("api/chat"))
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        // Below the 30 s pipeline watchdog: a hanging remote host must fail
+        // HERE so the raw transcript still gets delivered.
+        request.timeoutInterval = 20
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 

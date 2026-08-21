@@ -28,6 +28,7 @@ struct ModelsSettings: View {
     @State private var ollamaModels: [OllamaEngine.OllamaModel] = []
     @State private var hiddenCloudModels = 0
     @State private var ollamaHost: String = UserDefaults.standard.string(forKey: "engine.ollama.host") ?? ""
+    @State private var hostError = false
     @State private var ollamaModel: String = UserDefaults.standard.string(forKey: "engine.ollama.model") ?? ""
 
     var body: some View {
@@ -73,10 +74,22 @@ struct ModelsSettings: View {
                     .onSubmit { applyOllamaHost() }
                 Text(L("engine.ollama.host.hint"))
                     .font(.caption).foregroundStyle(.secondary)
-                if OllamaEngine.isRemoteHost {
-                    Label(LF("engine.ollama.remoteWarning",
-                             OllamaEngine.baseURL.absoluteString),
+                if hostError {
+                    Label(L("engine.ollama.host.invalid"), systemImage: "exclamationmark.circle")
+                        .font(.caption).foregroundStyle(.red)
+                }
+                // Derived from the TYPED value (@State) — a UserDefaults read here
+                // is invisible to SwiftUI and the warning failed to appear.
+                if let url = OllamaEngine.normalizedURL(from: ollamaHost),
+                   OllamaEngine.isRemote(url: url) {
+                    Label(LF("engine.ollama.remoteWarning", url.absoluteString),
                           systemImage: "network")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                if !ollamaModel.isEmpty, !ollamaModels.isEmpty,
+                   !ollamaModels.contains(where: { $0.name == ollamaModel }) {
+                    Label(LF("engine.ollama.modelMissing", ollamaModel),
+                          systemImage: "questionmark.circle")
                         .font(.caption).foregroundStyle(.orange)
                 }
                 Text(L("engine.ollama.hint"))
@@ -88,26 +101,48 @@ struct ModelsSettings: View {
                 }
             }
             Section {
-                Text(L("models.privacy"))
-                    .font(.caption).foregroundStyle(.secondary)
+                if let url = OllamaEngine.normalizedURL(from: ollamaHost),
+                   OllamaEngine.isRemote(url: url) {
+                    Text(LF("models.privacy.remote", url.absoluteString))
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(L("models.privacy"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
         .task { await reloadOllamaCatalog() }
+        .onDisappear { applyOllamaHost() } // Enter is easy to forget — commit on leave
     }
 
+    /// Validates at WRITE time (garbage is rejected visibly, never silently
+    /// rerouted to localhost) and skips unchanged values.
     private func applyOllamaHost() {
-        UserDefaults.standard.set(ollamaHost.trimmingCharacters(in: .whitespaces),
-                                  forKey: "engine.ollama.host")
-        Task { await reloadOllamaCatalog() }
+        let trimmed = ollamaHost.trimmingCharacters(in: .whitespaces)
+        guard OllamaEngine.normalizedURL(from: trimmed) != nil else {
+            hostError = true
+            return
+        }
+        hostError = false
+        let stored = UserDefaults.standard.string(forKey: "engine.ollama.host") ?? ""
+        guard trimmed != stored else { return }
+        UserDefaults.standard.set(trimmed, forKey: "engine.ollama.host")
+        let mode = state.selectedMode
+        Task {
+            await reloadOllamaCatalog()
+            await state.ollamaLLM.prewarm(mode: mode)
+        }
     }
 
     private func reloadOllamaCatalog() async {
         let catalog = await OllamaEngine.modelCatalog()
         ollamaModels = catalog.local
         hiddenCloudModels = catalog.cloudHidden
-        if ollamaModel.isEmpty || !catalog.local.contains(where: { $0.name == ollamaModel }),
-           let first = catalog.local.first {
+        // Only FILL an empty selection — never overwrite an explicit choice: a
+        // host experiment or a temporarily missing model must not destroy it
+        // (the runtime falls back to Apple and the UI shows a hint instead).
+        if ollamaModel.isEmpty, let first = catalog.local.first {
             ollamaModel = first.name
             UserDefaults.standard.set(first.name, forKey: "engine.ollama.model")
         }

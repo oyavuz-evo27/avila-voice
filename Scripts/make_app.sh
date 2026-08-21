@@ -8,7 +8,8 @@ BIN="$ROOT/.build/release/AvilaVoice"
 
 # Guard: a single stray quote in a .strings file silently kills ALL localization
 # (bit us on 21.08. — the app fell back to raw keys). Lint every table up front.
-for STRINGS in "$ROOT"/Sources/*/Resources/*.lproj/*.strings; do
+for STRINGS in "$ROOT"/Sources/*/Resources/*.lproj/*.strings "$ROOT"/Resources/*.lproj/*.strings; do
+  [ -f "$STRINGS" ] || continue
   plutil -lint "$STRINGS" >/dev/null || { echo "✗ kaputte Strings-Datei: $STRINGS"; exit 1; }
 done
 

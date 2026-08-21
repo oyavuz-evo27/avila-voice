@@ -86,6 +86,9 @@
 "engine.ollama.missing" = "Ollama is not running or has no models. Install: https://ollama.com — then e.g. “ollama pull gemma4:e4b-mlx”.";
 "Model" = "Model";
 "engine.ollama.host" = "Ollama address";
+"engine.ollama.host.invalid" = "Invalid address — the entry was not saved.";
+"engine.ollama.modelMissing" = "Selected model “%@” is not present on this server — dictations use Apple meanwhile.";
+"models.privacy.remote" = "Speech recognition runs on this Mac. AI rewriting is sent to your own server %@ — nothing else leaves this device.";
 "engine.ollama.host.hint" = "Empty = this Mac (localhost). For another of your own Macs on the network, enter its address, e.g. mac-mini.local:11434 — Ollama must run there with OLLAMA_HOST=0.0.0.0. Confirm with Enter.";
 "engine.ollama.remoteWarning" = "Dictations are sent to %@ for processing — only enter your own devices on your own network.";
 "engine.ollama.cloudHidden" = "%d Ollama cloud model(s) hidden — they would send dictations to ollama.com and are therefore not selectable.";

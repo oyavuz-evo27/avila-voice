@@ -86,6 +86,9 @@
 "engine.ollama.missing" = "Ollama läuft nicht oder hat keine Modelle. Installieren: https://ollama.com — dann z. B. „ollama pull gemma4:e4b-mlx“.";
 "Model" = "Modell";
 "engine.ollama.host" = "Ollama-Adresse";
+"engine.ollama.host.invalid" = "Ungültige Adresse — Eingabe wurde nicht übernommen.";
+"engine.ollama.modelMissing" = "Gewähltes Modell „%@“ ist auf diesem Server nicht vorhanden — Diktate nutzen solange Apple.";
+"models.privacy.remote" = "Spracherkennung läuft auf diesem Mac. KI-Umformulierung wird an Ihren eigenen Server %@ gesendet — sonst verlässt nichts dieses Gerät.";
 "engine.ollama.host.hint" = "Leer = dieser Mac (localhost). Für einen anderen eigenen Mac im Netzwerk dessen Adresse eintragen, z. B. mac-mini.local:11434 — dort muss Ollama mit OLLAMA_HOST=0.0.0.0 laufen. Eingabe mit Enter bestätigen.";
 "engine.ollama.remoteWarning" = "Diktate werden zur Verarbeitung an %@ gesendet — nur eigene Geräte im eigenen Netzwerk eintragen.";
 "engine.ollama.cloudHidden" = "%d Ollama-Cloud-Modell(e) ausgeblendet — sie würden Diktate an ollama.com senden und sind deshalb nicht wählbar.";

@@ -2,8 +2,8 @@ import SwiftUI
 
 /// The pill: a small bar at rest. Hovering reveals two circular accessories —
 /// copy (left, icon only; the last transcript appears as a bubble on hover) and
-/// mode selection (right, opens a chip list). While recording, two warm gradient
-/// segments orbit the pill border.
+/// mode selection (right, opens a chip list). While recording, a STATIC warm
+/// gradient ring frames the capsule (issue #13: only the waveform may move).
 struct PillView: View {
     @EnvironmentObject var state: AppState
     @State private var hoverPill = false
@@ -480,8 +480,7 @@ struct PillView: View {
                     gradient: Gradient(colors: [
                         warmOrange, warmPink, warmPurple, warmPink, warmOrange,
                     ]),
-                    center: .center,
-                    angle: .degrees(0)),
+                    center: .center),
                 lineWidth: 1.5)
             .opacity(0.85)
             .shadow(color: warmPink.opacity(0.25), radius: 4)
