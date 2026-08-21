@@ -61,7 +61,7 @@
 "New mode" = "New mode";
 "instruction.hint" = "Applied to every dictation in this mode — between transcription and insertion. Changes take effect immediately.";
 "modes.select" = "Select a mode on the left, or create one with +.";
-"dictionary.hint" = "Technical terms and names that must be spelled correctly (applies to all modes):";
+"dictionary.hint" = "Technical terms and names that must be spelled correctly (applies to all modes). Persistent mishearings as a rule with an arrow: “Narülsen → Navision” replaces every heard “Narülsen”.";
 "dictionary.placeholder" = "New word (e.g. Navision)";
 "Add" = "Add";
 "Today" = "Today";

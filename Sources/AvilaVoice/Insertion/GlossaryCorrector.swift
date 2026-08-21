@@ -6,10 +6,46 @@ import Foundation
 /// vocabulary corrections at times.
 enum GlossaryCorrector {
 
+    /// Splits dictionary entries into replacement RULES ("Narülsen → Navision",
+    /// also accepts "->" or "=") and plain terms.
+    static func parse(_ dictionary: [String]) -> (rules: [(wrong: String, right: String)], terms: [String]) {
+        var rules: [(String, String)] = []
+        var terms: [String] = []
+        for entry in dictionary {
+            if let sep = ["→", "->", "="].first(where: { entry.contains($0) }) {
+                let parts = entry.components(separatedBy: sep)
+                if parts.count == 2 {
+                    let wrong = parts[0].trimmingCharacters(in: .whitespaces)
+                    let right = parts[1].trimmingCharacters(in: .whitespaces)
+                    if !wrong.isEmpty, !right.isEmpty { rules.append((wrong, right)); continue }
+                }
+            }
+            terms.append(entry)
+        }
+        return (rules, terms)
+    }
+
     static func apply(_ text: String, dictionary: [String]) -> (text: String, corrections: [String]) {
-        let singles = dictionary.filter { !$0.contains(" ") && $0.count >= 4 }
-        guard !singles.isEmpty else { return (text, []) }
+        let (rules, terms) = parse(dictionary)
+        var text = text
         var corrections: [String] = []
+        // Explicit rules first: exact whole-word match, case-insensitive — for
+        // mishearings too far away for the fuzzy pass ("Narülsen" → "Navision").
+        for (wrong, right) in rules {
+            let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: wrong)
+                        + "(?![\\p{L}\\p{N}])"
+            if let regex = try? NSRegularExpression(pattern: pattern,
+                                                    options: [.caseInsensitive]) {
+                let range = NSRange(text.startIndex..., in: text)
+                if regex.firstMatch(in: text, range: range) != nil {
+                    text = regex.stringByReplacingMatches(in: text, range: range,
+                                                          withTemplate: right)
+                    corrections.append("\(wrong) → \(right)")
+                }
+            }
+        }
+        let singles = terms.filter { !$0.contains(" ") && $0.count >= 4 }
+        guard !singles.isEmpty else { return (text, corrections) }
         var result = ""
         result.reserveCapacity(text.count)
         var token = ""

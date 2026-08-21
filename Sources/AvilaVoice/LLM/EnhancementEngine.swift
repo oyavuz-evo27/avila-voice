@@ -72,8 +72,16 @@ enum PromptBuilder {
                            context: DictationContext?) -> String {
         var parts: [String] = []
         if !dictionary.isEmpty {
-            parts.append("Vocabulary (correct any misheard versions of these exact terms): "
-                         + dictionary.joined(separator: ", "))
+            let (rules, terms) = GlossaryCorrector.parse(dictionary)
+            if !terms.isEmpty {
+                parts.append("Vocabulary (correct any misheard versions of these exact terms): "
+                             + terms.joined(separator: ", "))
+            }
+            if !rules.isEmpty {
+                parts.append("Known mishearings — ALWAYS replace: "
+                             + rules.map { "\"\($0.wrong)\" → \"\($0.right)\"" }
+                                    .joined(separator: ", "))
+            }
         }
         if let context, !context.isEmpty {
             // Context budget: the on-device model's latency scales with input length

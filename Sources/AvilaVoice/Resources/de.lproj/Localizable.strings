@@ -61,7 +61,7 @@
 "New mode" = "Neuer Modus";
 "instruction.hint" = "Wird bei jedem Diktat dieses Modus angewendet — zwischen Transkription und Einfügen. Änderungen gelten sofort.";
 "modes.select" = "Wählen Sie links einen Modus oder legen Sie mit + einen neuen an.";
-"dictionary.hint" = "Fachbegriffe und Namen, die korrekt geschrieben werden müssen (gilt für alle Modi):";
+"dictionary.hint" = "Fachbegriffe und Namen, die korrekt geschrieben werden müssen (gilt für alle Modi). Hartnäckige Hörfehler als Regel mit Pfeil: „Narülsen → Navision" ersetzt jedes gehörte „Narülsen".";
 "dictionary.placeholder" = "Neues Wort (z. B. Navision)";
 "Add" = "Hinzufügen";
 "Today" = "Heute";
