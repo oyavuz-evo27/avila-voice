@@ -400,6 +400,13 @@ final class AppState: ObservableObject {
                 } else if words < 4 {
                     DebugLog.log("timing: llm skipped (short dictation, \(words) words)")
                 }
+                // Deterministic vocabulary pass (raw mode has no LLM; the LLM
+                // demonstrably misses vocabulary corrections at times, too).
+                let glossary = GlossaryCorrector.apply(final, dictionary: dictionary)
+                if !glossary.corrections.isEmpty {
+                    DebugLog.log("glossary: " + glossary.corrections.joined(separator: ", "))
+                    final = glossary.text
+                }
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 // The AX focus probe is blocking IPC into the target app — off the
@@ -420,6 +427,25 @@ final class AppState: ObservableObject {
                 }
                 DebugLog.log("focus probe: \(probe.editable ? "editable" : "NOT editable") — \(probe.detail)")
                 let editable = probe.editable
+                // Wait (bounded) until the user's PHYSICAL modifiers are released:
+                // the raw-mode pipeline finishes faster than fingers lift off the
+                // stop hotkey — a still-held ⌥/⌘ merges into the synthesized ⌘V and
+                // turns it into a different shortcut in the target app, which then
+                // silently ignores the paste (observed 21.08. in VS Code).
+                await Task.detached(priority: .userInitiated) {
+                    let relevant: CGEventFlags = [.maskCommand, .maskAlternate,
+                                                  .maskControl, .maskShift, .maskSecondaryFn]
+                    let started = Date()
+                    while Date().timeIntervalSince(started) < 1.0 {
+                        let flags = CGEventSource.flagsState(.combinedSessionState)
+                        if CGEventFlags(rawValue: flags.rawValue & relevant.rawValue).isEmpty { break }
+                        usleep(20_000)
+                    }
+                    let waited = Date().timeIntervalSince(started) * 1000
+                    if waited > 50 {
+                        DebugLog.log(String(format: "insert: waited %.0f ms for modifier release", waited))
+                    }
+                }.value
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 self.deliver(raw: raw, final: final, mode: mode, duration: duration,
