@@ -18,59 +18,59 @@ enum TextInserter {
     /// True if the frontmost app has a focused element that accepts text.
     /// Secure fields are excluded: a dictated password must never be pasted, logged
     /// to history, or counted in statistics.
-    nonisolated static func hasEditableFocus() -> Bool {
-        editableFocusProbe().editable
-    }
+    /// Tri-state focus verdict (issue #14): the AX write path needs a settable
+    /// element, but the Cmd+V paste path does NOT — an AXWebArea (Electron/web
+    /// views) takes paste just fine. Only secure fields, known non-text controls
+    /// and "no focused element at all" block insertion entirely.
+    enum FocusAccess { case editable, pasteOnly, blocked }
 
-    /// Focus probe with a DIAGNOSABLE outcome (issue #11: five different reasons
-    /// produced an indistinguishable, unlogged `false`).
-    nonisolated static func editableFocusProbe() -> (editable: Bool, detail: String) {
+    nonisolated static func focusProbe() -> (access: FocusAccess, detail: String) {
         let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-        guard AXIsProcessTrusted() else { return (false, "\(app): AX not trusted") }
+        guard AXIsProcessTrusted() else { return (.blocked, "\(app): AX not trusted") }
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
         let err = AXUIElementCopyAttributeValue(systemWide,
                                                 kAXFocusedUIElementAttribute as CFString,
                                                 &focused)
         guard err == .success, let element = focused else {
-            return (false, "\(app): no focused element (AXError \(err.rawValue))")
+            return (.blocked, "\(app): no focused element (AXError \(err.rawValue))")
         }
         let axElement = element as! AXUIElement
 
         var subroleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(axElement, kAXSubroleAttribute as CFString, &subroleRef)
         if subroleRef as? String == "AXSecureTextField" {
-            return (false, "\(app): secure text field")
+            return (.blocked, "\(app): secure text field")
         }
 
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &roleRef)
         let role = roleRef as? String
         if let role, ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role) {
-            return (true, "\(app): \(role)")
+            return (.editable, "\(app): \(role)")
         }
         if let role, Self.nonTextRoles.contains(role) {
-            return (false, "\(app): non-text role \(role)")
+            return (.blocked, "\(app): non-text role \(role)")
         }
-        // Many apps (browsers, Electron) expose editable areas differently — accept any
-        // remaining element whose value is settable.
         var settable = DarwinBoolean(false)
-        let settableErr = AXUIElementIsAttributeSettable(axElement,
-                                                         kAXValueAttribute as CFString,
-                                                         &settable)
-        return (settable.boolValue,
-                "\(app): role \(role ?? "?"), value settable \(settable.boolValue)"
-                + (settableErr == .success ? "" : " (AXError \(settableErr.rawValue))"))
+        AXUIElementIsAttributeSettable(axElement, kAXValueAttribute as CFString, &settable)
+        if settable.boolValue {
+            return (.editable, "\(app): role \(role ?? "?"), value settable")
+        }
+        // Not AX-writable, but focused and not secure (e.g. AXWebArea): the paste
+        // path works there — a wasted paste is harmless, the clipboard restore is
+        // changeCount-guarded.
+        return (.pasteOnly, "\(app): role \(role ?? "?"), paste only")
     }
 
     /// Inserts `text` at the caret of the frontmost app. Primary path: set the
     /// focused element's AXSelectedText directly (exact paste semantics — replaces
     /// the selection, inserts at the caret) with NO clipboard involvement, so the
     /// restore race of issue #2 cannot occur. Fallback: clipboard + Cmd+V.
-    static func insert(_ text: String) -> Bool {
+    static func insert(_ text: String, axAllowed: Bool = true) -> Bool {
         guard AXIsProcessTrusted() else { return false }
         let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-        if axInsert(text) {
+        if axAllowed, axInsert(text) {
             DebugLog.log("insert method: ax → \(app) (value change verified)")
             return true
         }

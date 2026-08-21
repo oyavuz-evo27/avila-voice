@@ -112,10 +112,17 @@ offers an optional **quality tier**:
 | AI rewriting | Apple Foundation Models — ~0 RAM | **Ollama** with any installed local model — recommended `gemma4:e4b-mlx` (~1.3 s for a 450-char dictation, 96 tok/s) or `gemma4:26b-mlx` (best quality): markedly better clean-up, follows instructions more strictly |
 
 Ollama is optional: install it from [ollama.com](https://ollama.com), run
-`ollama pull gemma4:e4b-mlx`, then pick "Ollama" in Settings → Models. Avila Voice only
-talks to Ollama on `localhost:11434` and only offers models that run locally: Ollama
-**cloud models** (`-cloud` tags) would forward requests to ollama.com, so Avila Voice
-hides them — the local-only promise ends at the Ollama boundary otherwise.
+`ollama pull gemma4:e4b-mlx`, then pick "Ollama" in Settings → Models. Avila Voice
+only offers models that run locally: Ollama **cloud models** (`-cloud` tags) would
+forward requests to ollama.com, so Avila Voice hides them — the local-only promise
+ends at the Ollama boundary otherwise.
+
+**Network offload (optional):** a low-memory Mac can hand the AI pass to another of
+your own Macs — enter its address (e.g. `mac-mini.local:11434`) as the Ollama address
+in Settings → Models. On the serving Mac, Ollama must listen on the network:
+`OLLAMA_HOST=0.0.0.0 ollama serve` (or `launchctl setenv OLLAMA_HOST 0.0.0.0` before
+starting the app). The settings show an explicit notice whenever dictations leave the
+device; if the remote Mac is unreachable, the app falls back to Apple automatically.
 
 ### Which engines for which Mac?
 

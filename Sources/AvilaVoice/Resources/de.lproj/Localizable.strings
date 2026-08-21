@@ -61,7 +61,7 @@
 "New mode" = "Neuer Modus";
 "instruction.hint" = "Wird bei jedem Diktat dieses Modus angewendet — zwischen Transkription und Einfügen. Änderungen gelten sofort.";
 "modes.select" = "Wählen Sie links einen Modus oder legen Sie mit + einen neuen an.";
-"dictionary.hint" = "Fachbegriffe und Namen, die korrekt geschrieben werden müssen (gilt für alle Modi). Hartnäckige Hörfehler als Regel mit Pfeil: „Narülsen → Navision" ersetzt jedes gehörte „Narülsen".";
+"dictionary.hint" = "Fachbegriffe und Namen, die korrekt geschrieben werden müssen (gilt für alle Modi). Hartnäckige Hörfehler als Regel mit Pfeil: „Narülsen → Navision“ ersetzt jedes gehörte „Narülsen“.";
 "dictionary.placeholder" = "Neues Wort (z. B. Navision)";
 "Add" = "Hinzufügen";
 "Today" = "Heute";
@@ -85,6 +85,9 @@
 "engine.ollama.hint" = "Nutzt ein in Ollama installiertes Modell (z. B. Gemma 4 oder Qwen). Läuft vollständig auf diesem Mac; Ollama muss laufen. Empfehlung: gemma4:e4b-mlx (schnell, sehr gut) oder gemma4:26b-mlx (beste Qualität, 17 GB RAM).";
 "engine.ollama.missing" = "Ollama läuft nicht oder hat keine Modelle. Installieren: https://ollama.com — dann z. B. „ollama pull gemma4:e4b-mlx“.";
 "Model" = "Modell";
+"engine.ollama.host" = "Ollama-Adresse";
+"engine.ollama.host.hint" = "Leer = dieser Mac (localhost). Für einen anderen eigenen Mac im Netzwerk dessen Adresse eintragen, z. B. mac-mini.local:11434 — dort muss Ollama mit OLLAMA_HOST=0.0.0.0 laufen. Eingabe mit Enter bestätigen.";
+"engine.ollama.remoteWarning" = "Diktate werden zur Verarbeitung an %@ gesendet — nur eigene Geräte im eigenen Netzwerk eintragen.";
 "engine.ollama.cloudHidden" = "%d Ollama-Cloud-Modell(e) ausgeblendet — sie würden Diktate an ollama.com senden und sind deshalb nicht wählbar.";
 "error.ollamaUnavailable" = "Ollama ist nicht erreichbar oder das gewählte Modell fehlt.";
 "models.privacy" = "Alle Modelle laufen ausschließlich auf diesem Mac. Der einzige Netzwerkzugriff ist der einmalige Download von Modelldateien (Parakeet von Hugging Face; Ollama-Modelle über Ollama).";

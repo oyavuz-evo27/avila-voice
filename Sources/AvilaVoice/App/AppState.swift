@@ -336,7 +336,7 @@ final class AppState: ObservableObject {
         let startedContext = pendingContext
         pendingContext = nil
 
-        pipelineTask = Task { [sttEngine, llmEngine] in
+        pipelineTask = Task { [sttEngine, llmEngine, appleLLM] in
             defer {
                 // Keep the LAST recording for recognition-quality diagnosis.
                 let keep = FileManager.default.homeDirectoryForCurrentUser
@@ -386,7 +386,21 @@ final class AppState: ObservableObject {
                 // AI-free modes insert the raw transcript directly (issue #8); very
                 // short dictations skip the LLM too: ~350 ms saved, and the system
                 // model tends to mistranslate 2–3-word inputs.
-                if mode.usesAI, words >= 4, await llmEngine.isAvailable() {
+                // Resolve the engine HERE (issue #15): an unavailable Ollama
+                // (model missing, server down, only cloud models) silently skipped
+                // the AI step entirely — the README promises an Apple fallback.
+                var activeLLM: EnhancementEngine? = nil
+                if mode.usesAI, words >= 4 {
+                    if await llmEngine.isAvailable() {
+                        activeLLM = llmEngine
+                    } else if await appleLLM.isAvailable() {
+                        DebugLog.log("llm: '\(llmEngine.displayName)' unavailable — falling back to Apple Foundation Models")
+                        activeLLM = appleLLM
+                    } else {
+                        DebugLog.log("llm SKIPPED: no engine available ('\(llmEngine.displayName)' and Apple both unavailable) — inserting raw transcript")
+                    }
+                }
+                if let llmEngine = activeLLM {
                     let llmStarted = Date()
                     do {
                         final = try await llmEngine.enhance(
@@ -428,17 +442,18 @@ final class AppState: ObservableObject {
                 // pressure the AX answer is sporadically late/empty) and ALWAYS logged
                 // with app, role and reason.
                 var probe = await Task.detached(priority: .userInitiated) {
-                    TextInserter.editableFocusProbe()
+                    TextInserter.focusProbe()
                 }.value
-                if !probe.editable {
-                    DebugLog.log("focus probe failed (\(probe.detail)) — retrying in 400 ms")
+                if probe.access == .blocked {
+                    DebugLog.log("focus probe blocked (\(probe.detail)) — retrying in 400 ms")
                     try? await Task.sleep(for: .milliseconds(400))
                     probe = await Task.detached(priority: .userInitiated) {
-                        TextInserter.editableFocusProbe()
+                        TextInserter.focusProbe()
                     }.value
                 }
-                DebugLog.log("focus probe: \(probe.editable ? "editable" : "NOT editable") — \(probe.detail)")
-                let editable = probe.editable
+                DebugLog.log("focus probe: \(probe.access) — \(probe.detail)")
+                let editable = probe.access != .blocked
+                let axAllowed = probe.access == .editable
                 // Wait (bounded) until the user's PHYSICAL modifiers are released:
                 // the raw-mode pipeline finishes faster than fingers lift off the
                 // stop hotkey — a still-held ⌥/⌘ merges into the synthesized ⌘V and
@@ -461,7 +476,7 @@ final class AppState: ObservableObject {
                 guard !Task.isCancelled, self.pipelineGeneration == generation,
                       case .processing = self.phase else { return }
                 self.deliver(raw: raw, final: final, mode: mode, duration: duration,
-                             editable: editable)
+                             editable: editable, axAllowed: axAllowed)
             } catch {
                 DebugLog.log(String(format: "timing: pipeline failed after %.0f ms — %@",
                                     Date().timeIntervalSince(pipelineStarted) * 1000,
@@ -502,11 +517,11 @@ final class AppState: ObservableObject {
     /// Synchronous on purpose: no suspension between the final generation/phase
     /// check and the paste, so a cancel can never slip in between.
     private func deliver(raw: String, final: String, mode: Mode, duration: Double,
-                         editable: Bool) {
+                         editable: Bool, axAllowed: Bool) {
         streamingPreview = ""
         livePreview = ""
         let insertStarted = Date()
-        let inserted = editable && TextInserter.insert(final)
+        let inserted = editable && TextInserter.insert(final, axAllowed: axAllowed)
         DebugLog.log(String(format: "timing: insert %.0f ms (eingefügt: %@)",
                             Date().timeIntervalSince(insertStarted) * 1000,
                             inserted ? "ja" : "nein"))

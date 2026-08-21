@@ -27,6 +27,7 @@ struct ModelsSettings: View {
     @ObservedObject var store = ModelStore.shared
     @State private var ollamaModels: [OllamaEngine.OllamaModel] = []
     @State private var hiddenCloudModels = 0
+    @State private var ollamaHost: String = UserDefaults.standard.string(forKey: "engine.ollama.host") ?? ""
     @State private var ollamaModel: String = UserDefaults.standard.string(forKey: "engine.ollama.model") ?? ""
 
     var body: some View {
@@ -67,6 +68,17 @@ struct ModelsSettings: View {
                         Task { await state.ollamaLLM.prewarm(mode: mode) }
                     }
                 }
+                TextField(L("engine.ollama.host"), text: $ollamaHost,
+                          prompt: Text("localhost:11434"))
+                    .onSubmit { applyOllamaHost() }
+                Text(L("engine.ollama.host.hint"))
+                    .font(.caption).foregroundStyle(.secondary)
+                if OllamaEngine.isRemoteHost {
+                    Label(LF("engine.ollama.remoteWarning",
+                             OllamaEngine.baseURL.absoluteString),
+                          systemImage: "network")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 Text(L("engine.ollama.hint"))
                     .font(.caption).foregroundStyle(.secondary)
                 if hiddenCloudModels > 0 {
@@ -81,14 +93,23 @@ struct ModelsSettings: View {
             }
         }
         .formStyle(.grouped)
-        .task {
-            let catalog = await OllamaEngine.modelCatalog()
-            ollamaModels = catalog.local
-            hiddenCloudModels = catalog.cloudHidden
-            if ollamaModel.isEmpty, let first = ollamaModels.first {
-                ollamaModel = first.name
-                UserDefaults.standard.set(first.name, forKey: "engine.ollama.model")
-            }
+        .task { await reloadOllamaCatalog() }
+    }
+
+    private func applyOllamaHost() {
+        UserDefaults.standard.set(ollamaHost.trimmingCharacters(in: .whitespaces),
+                                  forKey: "engine.ollama.host")
+        Task { await reloadOllamaCatalog() }
+    }
+
+    private func reloadOllamaCatalog() async {
+        let catalog = await OllamaEngine.modelCatalog()
+        ollamaModels = catalog.local
+        hiddenCloudModels = catalog.cloudHidden
+        if ollamaModel.isEmpty || !catalog.local.contains(where: { $0.name == ollamaModel }),
+           let first = catalog.local.first {
+            ollamaModel = first.name
+            UserDefaults.standard.set(first.name, forKey: "engine.ollama.model")
         }
     }
 

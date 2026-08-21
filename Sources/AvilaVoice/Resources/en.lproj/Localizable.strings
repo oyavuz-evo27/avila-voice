@@ -85,6 +85,9 @@
 "engine.ollama.hint" = "Uses a model installed in Ollama (e.g. Gemma 4 or Qwen). Runs entirely on this Mac; Ollama must be running. Recommended: gemma4:e4b-mlx (fast, very good) or gemma4:26b-mlx (best quality, 17 GB RAM).";
 "engine.ollama.missing" = "Ollama is not running or has no models. Install: https://ollama.com — then e.g. “ollama pull gemma4:e4b-mlx”.";
 "Model" = "Model";
+"engine.ollama.host" = "Ollama address";
+"engine.ollama.host.hint" = "Empty = this Mac (localhost). For another of your own Macs on the network, enter its address, e.g. mac-mini.local:11434 — Ollama must run there with OLLAMA_HOST=0.0.0.0. Confirm with Enter.";
+"engine.ollama.remoteWarning" = "Dictations are sent to %@ for processing — only enter your own devices on your own network.";
 "engine.ollama.cloudHidden" = "%d Ollama cloud model(s) hidden — they would send dictations to ollama.com and are therefore not selectable.";
 "error.ollamaUnavailable" = "Ollama is not reachable or the selected model is missing.";
 "models.privacy" = "All models run exclusively on this Mac. The only network access is the one-time download of model files (Parakeet from Hugging Face; Ollama models via Ollama).";

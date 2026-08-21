@@ -13,8 +13,6 @@ struct PillView: View {
     @State private var showAccessories = false
     @State private var modeListOpen = false
     @State private var copiedFlash = false
-    @State private var orbitA: Double = 0
-    @State private var ringPulse = false
 
     // Manual growth animation: implicit SwiftUI animations do not render for
     // phase-driven layout in this panel (verified frame-by-frame with the
@@ -471,6 +469,10 @@ struct PillView: View {
 
     /// The full border carries the warm three-color gradient (orange → pink →
     /// purple), closed into a seamless ring that rotates very slowly.
+    /// STATIC by decision (issue #13): the rotating gradient (14 s orbit) and the
+    /// breathing shadow (1.5 s pulse) read as the whole pill shifting — during a
+    /// recording only the waveform may move. The tri-color gradient stays as a
+    /// fixed design element; grow/shrink transitions are untouched.
     private var recordingGlow: some View {
         Capsule()
             .strokeBorder(
@@ -479,25 +481,10 @@ struct PillView: View {
                         warmOrange, warmPink, warmPurple, warmPink, warmOrange,
                     ]),
                     center: .center,
-                    angle: .degrees(orbitA)),
+                    angle: .degrees(0)),
                 lineWidth: 1.5)
-            .opacity(ringPulse ? 1.0 : 0.45)
-            .shadow(color: warmPink.opacity(ringPulse ? 0.4 : 0.15),
-                    radius: ringPulse ? 6 : 3)
-            .onAppear {
-                // Reset and animate in SEPARATE update cycles — otherwise the second
-                // recording nets to "no change" and the animations freeze.
-                orbitA = 0
-                ringPulse = false
-                DispatchQueue.main.async {
-                    withAnimation(.linear(duration: 14.0).repeatForever(autoreverses: false)) {
-                        orbitA = 360
-                    }
-                    withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                        ringPulse = true
-                    }
-                }
-            }
+            .opacity(0.85)
+            .shadow(color: warmPink.opacity(0.25), radius: 4)
     }
 
     /// Live waveform: every bar reflects the current input level (no scrolling

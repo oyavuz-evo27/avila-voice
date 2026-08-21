@@ -8,7 +8,26 @@ import Foundation
 actor OllamaEngine: EnhancementEngine {
     nonisolated let displayName = "Ollama (lokal)"
 
-    static let baseURL = URL(string: "http://localhost:11434")!
+    /// Server address — configurable (issue #16) so a low-memory Mac can hand the
+    /// AI pass to another OWN Mac on the local network (e.g. Air → Mac mini).
+    /// Default stays localhost; the settings UI shows an explicit notice for any
+    /// remote address, and the cloud-model filter (#7) applies unchanged.
+    static var baseURL: URL {
+        let stored = UserDefaults.standard.string(forKey: "engine.ollama.host")?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        guard !stored.isEmpty else { return URL(string: "http://localhost:11434")! }
+        let candidate = stored.contains("://") ? stored : "http://" + stored
+        guard let url = URL(string: candidate), url.host != nil else {
+            return URL(string: "http://localhost:11434")!
+        }
+        return url
+    }
+
+    /// True when dictations would leave this Mac (any non-loopback host).
+    static var isRemoteHost: Bool {
+        let host = baseURL.host?.lowercased() ?? "localhost"
+        return !["localhost", "127.0.0.1", "::1"].contains(host)
+    }
     /// Model tag chosen in settings (empty = first available).
     static var modelName: String {
         UserDefaults.standard.string(forKey: "engine.ollama.model") ?? ""

@@ -5,7 +5,11 @@ import Foundation
 /// Keys are the English texts; missing translations fall back to the key itself.
 /// Resolved via ResourceBundle — Bundle.module fatalErrors inside a packaged app
 /// on any machine but the one that built it (issue #5).
-private let stringsBundle: Bundle = ResourceBundle.named("AvilaVoice_AvilaVoice") ?? Bundle.module
+private let stringsBundle: Bundle = {
+    let bundle = ResourceBundle.named("AvilaVoice_AvilaVoice") ?? Bundle.module
+    DebugLog.log("strings bundle: \(bundle.bundlePath) — localizations \(bundle.localizations), preferred \(bundle.preferredLocalizations), probe '\(bundle.localizedString(forKey: "Start Dictation", value: "MISS", table: nil))'")
+    return bundle
+}()
 
 func L(_ key: String) -> String {
     stringsBundle.localizedString(forKey: key, value: key, table: nil)
