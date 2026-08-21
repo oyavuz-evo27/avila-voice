@@ -274,3 +274,16 @@ unter „Lokal" ergänzen).
   Ebenen interpolieren dieselbe Geometrie auf zwei Kurven → `.animation(nil, value: size)`
   am Pillenkörper: Geometrie animiert NUR noch über den Ticker; lokal per animate-Sonde
   verifiziert (Ebenen konzentrisch). Kein Release — wartet auf Onurs Freigabe.
+- **2026-08-21 (Mittag) — Issues #13–#16, Lokalisierungs-GAU, Review, v0.2.6.**
+  Deutsch war komplett weg: EIN gerades Anführungszeichen in de.lproj machte die ganze
+  Tabelle unlesbar (App zeigte rohe Keys) → gefixt, make_app.sh lintet jetzt alle
+  .strings (inkl. Resources/*.lproj), Bundle-Diagnose beim Start in beiden Localize.
+  Issues: #13 Ring statisch (Orbit+Puls raus, nur Balken bewegen sich) · #14 Fokus
+  dreistufig, AXWebArea → Paste-Whitelist · #15 Apple-Fallback am Gate + enhance-Retry
+  + Fallback-Prewarm, Cache an Host+Modell gekoppelt · #16 Ollama-Adresse einstellbar
+  (Validierung beim Schreiben, Port-Default 11434, Commit beim Verlassen, reaktive
+  Warnung, klebrige Modellwahl, Timeout 20 s < Watchdog 30 s). Lokaler Deep-Review
+  (10 Perspektiven) fand 12 Befunde, darunter Sicherheit: AX-Subrole-Fehler hätte
+  Passwortfeld-Schutz umgangen — alle gefixt (7aeb070). Außerdem: Modus-Persistenz,
+  Glossar-Korrektur + Ersetzungsregeln („Narülsen → Navision“), Modifier-Release-Wait,
+  Prompt-Vorlagen in docs/PROMPTS.md. Release v0.2.6 auf Onurs Freigabe.
